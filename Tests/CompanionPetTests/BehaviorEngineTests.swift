@@ -129,6 +129,21 @@ struct BehaviorEngineTests {
     }
 
     @Test
+    func recordJumpReturnsToActiveWorkState() {
+        let baseDate = Date(timeIntervalSince1970: 4_500)
+        let engine = CompanionBehaviorEngine(ambientDelayProvider: { 60 })
+
+        _ = engine.handle(event: CompanionEvent(source: "test", kind: .adapterConnected, timestamp: baseDate))
+        _ = engine.handle(event: CompanionEvent(source: "test", kind: .toolStarted, timestamp: baseDate.addingTimeInterval(1)))
+
+        let jumping = engine.recordJump(at: baseDate.addingTimeInterval(2))
+        #expect(jumping.currentState == .jumping)
+
+        let resumed = engine.advance(to: baseDate.addingTimeInterval(3.2))
+        #expect(resumed.currentState == .working)
+    }
+
+    @Test
     func recordWaveProducesTransientWavingStateAndReturnsToIdle() {
         let baseDate = Date(timeIntervalSince1970: 5_000)
         let engine = CompanionBehaviorEngine(ambientDelayProvider: { 60 })
@@ -143,6 +158,21 @@ struct BehaviorEngineTests {
 
         let done = engine.advance(to: baseDate.addingTimeInterval(3.0))
         #expect(done.currentState == .idle)
+    }
+
+    @Test
+    func recordWaveReturnsToWaitingState() {
+        let baseDate = Date(timeIntervalSince1970: 5_500)
+        let engine = CompanionBehaviorEngine(ambientDelayProvider: { 60 })
+
+        _ = engine.handle(event: CompanionEvent(source: "test", kind: .adapterConnected, timestamp: baseDate))
+        _ = engine.handle(event: CompanionEvent(source: "test", kind: .userWaiting, timestamp: baseDate.addingTimeInterval(1)))
+
+        let waving = engine.recordWave(at: baseDate.addingTimeInterval(2))
+        #expect(waving.currentState == .waving)
+
+        let resumed = engine.advance(to: baseDate.addingTimeInterval(3.6))
+        #expect(resumed.currentState == .waitingForUser)
     }
 
     @Test

@@ -16,7 +16,6 @@ final class CompanionBehaviorEngine {
     private var lastInteractionAt: Date?
     private var nextAmbientAt: Date?
     private var transientUntil: Date?
-    private var transientFollowupState: CompanionStateName?
     private var activeToolCount = 0
     private var isThinking = false
     private var isStreaming = false
@@ -39,7 +38,7 @@ final class CompanionBehaviorEngine {
         case .gitChanged:
             connectedSources.insert(event.source)
             waitingForUser = false
-            scheduleTransient(.ambient, until: now.addingTimeInterval(2.2), followup: .idle)
+            scheduleTransient(.ambient, until: now.addingTimeInterval(2.2))
             scheduleAmbient(from: now)
         case .buildStarted:
             connectedSources.insert(event.source)
@@ -54,7 +53,7 @@ final class CompanionBehaviorEngine {
             activeToolCount = 0
             isThinking = false
             isStreaming = false
-            scheduleTransient(.success, until: now.addingTimeInterval(1.5), followup: .idle)
+            scheduleTransient(.success, until: now.addingTimeInterval(1.5))
             scheduleAmbient(from: now)
         case .buildFailed:
             connectedSources.insert(event.source)
@@ -62,7 +61,7 @@ final class CompanionBehaviorEngine {
             activeToolCount = 0
             isThinking = false
             isStreaming = false
-            scheduleTransient(.error, until: now.addingTimeInterval(2), followup: .idle)
+            scheduleTransient(.error, until: now.addingTimeInterval(2))
             scheduleAmbient(from: now)
         case .codingStarted:
             connectedSources.insert(event.source)
@@ -90,7 +89,7 @@ final class CompanionBehaviorEngine {
             activeToolCount = 0
             isThinking = false
             isStreaming = false
-            scheduleTransient(.success, until: now.addingTimeInterval(1.5), followup: .idle)
+            scheduleTransient(.success, until: now.addingTimeInterval(1.5))
             scheduleAmbient(from: now)
         case .sessionStarted, .thinkingStarted:
             waitingForUser = false
@@ -123,14 +122,14 @@ final class CompanionBehaviorEngine {
             activeToolCount = 0
             isThinking = false
             isStreaming = false
-            scheduleTransient(.error, until: now.addingTimeInterval(2), followup: .idle)
+            scheduleTransient(.error, until: now.addingTimeInterval(2))
             scheduleAmbient(from: now)
         case .sessionEnded:
             activeToolCount = 0
             isThinking = false
             isStreaming = false
             waitingForUser = false
-            scheduleTransient(.success, until: now.addingTimeInterval(1.5), followup: .idle)
+            scheduleTransient(.success, until: now.addingTimeInterval(1.5))
             scheduleAmbient(from: now)
         case .userWaiting:
             waitingForUser = true
@@ -153,7 +152,7 @@ final class CompanionBehaviorEngine {
     func recordJump(at now: Date = .now) -> BehaviorSnapshot {
         lastInteractionAt = now
         // Matches the Codex atlas "jumping" row total (~1050ms) so the baked sprite plays through.
-        scheduleTransient(.jumping, until: now.addingTimeInterval(1.1), followup: .idle)
+        scheduleTransient(.jumping, until: now.addingTimeInterval(1.1))
         scheduleAmbient(from: now)
         return advance(to: now)
     }
@@ -161,7 +160,7 @@ final class CompanionBehaviorEngine {
     func recordWave(at now: Date = .now) -> BehaviorSnapshot {
         lastInteractionAt = now
         // ~1.5s lets the Codex "waving" row loop ~1.7x for a friendly greeting beat.
-        scheduleTransient(.waving, until: now.addingTimeInterval(1.5), followup: .idle)
+        scheduleTransient(.waving, until: now.addingTimeInterval(1.5))
         scheduleAmbient(from: now)
         return advance(to: now)
     }
@@ -169,13 +168,7 @@ final class CompanionBehaviorEngine {
     func advance(to now: Date = .now) -> BehaviorSnapshot {
         if let transientUntil, now >= transientUntil {
             clearTransient()
-            if let followup = transientFollowupState {
-                if followup == .waitingForUser {
-                    waitingForUser = true
-                }
-                currentState = followup
-                transientFollowupState = nil
-            }
+            currentState = derivedState(at: now)
         }
 
         if currentState != .success
@@ -187,7 +180,7 @@ final class CompanionBehaviorEngine {
         }
 
         if currentState == .idle, let nextAmbientAt, now >= nextAmbientAt {
-            scheduleTransient(.ambient, until: now.addingTimeInterval(2.2), followup: .idle)
+            scheduleTransient(.ambient, until: now.addingTimeInterval(2.2))
             currentState = .ambient
             self.nextAmbientAt = nil
         }
@@ -261,10 +254,9 @@ final class CompanionBehaviorEngine {
         nextAmbientAt = now.addingTimeInterval(ambientDelayProvider())
     }
 
-    private func scheduleTransient(_ state: CompanionStateName, until: Date, followup: CompanionStateName) {
+    private func scheduleTransient(_ state: CompanionStateName, until: Date) {
         currentState = state
         transientUntil = until
-        transientFollowupState = followup
     }
 
     private func clearTransient() {

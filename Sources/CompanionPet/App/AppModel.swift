@@ -9,6 +9,7 @@ struct OverlayBubble: Identifiable, Equatable {
     var symbolName: String?
     var sourceBadge: OverlaySourceBadge
     var source: String
+    var launchTarget: OverlayLaunchTarget
     var expiresAt: Date?
     var updatedAt: Date
 }
@@ -17,6 +18,15 @@ struct OverlaySourceBadge: Equatable {
     var label: String
     var symbolName: String
     var accessibilityLabel: String
+}
+
+enum OverlayLaunchTarget: Equatable {
+    case codexCLI
+    case codexApp
+    case lmStudio
+    case claudeCode
+    case openCode
+    case none
 }
 
 private enum OverlayBubbleUpdateMode {
@@ -74,6 +84,7 @@ final class AppModel: ObservableObject {
     private var activityTitlesByKey: [String: String] = [:]
     private var overlayActivitySourcesByKey: [String: String] = [:]
     private var waitingBubbleSource: String?
+    private var isWaitingBubbleDismissed = false
     private var lastWaveAt: Date?
     private static let waveCooldownSeconds: TimeInterval = 6.0
     private static let waitingBubbleID = "openpet.waiting_for_user"
@@ -251,12 +262,12 @@ final class AppModel: ObservableObject {
         if let lastWaveAt, now.timeIntervalSince(lastWaveAt) < AppModel.waveCooldownSeconds {
             return
         }
-        // Only wave when the pet is in a calm state — avoid interrupting active work.
+        // Avoid stacking short-lived animations; the behavior engine will resume the derived work state.
         switch currentState {
-        case .idle, .ambient, .waitingForUser, .sleeping, .disconnected:
-            break
-        default:
+        case .jumping, .waving, .success, .error:
             return
+        default:
+            break
         }
         lastWaveAt = now
         let snapshot = behaviorEngine.recordWave(at: now)
@@ -319,37 +330,28 @@ final class AppModel: ObservableObject {
         settings.showsSpeechBubbles && !overlayBubbles.isEmpty
     }
 
-    func handleOverlayBubbleTap(id: String, source: String?) {
+    func dismissOverlayBubble(id: String) {
+        if id == Self.waitingBubbleID {
+            isWaitingBubbleDismissed = true
+        }
+
+        overlayBubbles.removeAll { $0.id == id }
+        clearOverlayMessageIfNeeded()
+        applyOverlaySettings(selectedPetChanged: false)
+    }
+
+    func handleOverlayBubbleTap(id: String) {
         if let bubble = overlayBubbles.first(where: { $0.id == id }),
            bubble.symbolName == "checkmark.circle.fill" {
-            overlayBubbles.removeAll { $0.id == id }
-            if overlayBubbles.isEmpty {
-                overlayMessage = nil
-                overlayMessageTitle = nil
-                overlayMessageSymbolName = nil
-                overlayMessageSource = nil
-                overlayMessageExpiresAt = nil
-            }
-            applyOverlaySettings(selectedPetChanged: false)
+            dismissOverlayBubble(id: bubble.id)
             return
         }
 
-        guard let source else {
+        guard let bubble = overlayBubbles.first(where: { $0.id == id }) else {
             return
         }
 
-        switch source {
-        case "codex", "codex-cli", "codex-app", "codex-desktop":
-            activateRunningApplication(named: "Codex")
-        case "claude-code":
-            activateTerminalApplication()
-        case "opencode-cli":
-            activateTerminalApplication()
-        case "lmstudio-proxy":
-            activateRunningApplication(named: "LM Studio")
-        default:
-            break
-        }
+        openOverlayLaunchTarget(bubble.launchTarget)
     }
 
     func renderFrame(at date: Date) -> PetRenderFrame? {
@@ -747,7 +749,7 @@ final class AppModel: ObservableObject {
             selectedPet = exactMatch
         } else {
             selectedPet = availablePets.first
-            settings.selectedPetID = selectedPet?.id ?? "orbiter"
+            settings.selectedPetID = selectedPet?.id ?? BuiltInPet.defaultID
         }
         overlayController?.apply(settings: settings, selectedPetChanged: true)
         statusBarController?.refresh()
@@ -1033,6 +1035,7 @@ final class AppModel: ObservableObject {
             duration = 0
             keepsBubbleVisible = true
             waitingBubbleSource = event.source
+            isWaitingBubbleDismissed = false
         case .adapterDisconnected:
             message = event.payload["message"].flatMap(truncatedBubbleText) ?? "\(sourceLabel(for: event.source)) disconnected"
             title = nil
@@ -1096,6 +1099,7 @@ final class AppModel: ObservableObject {
             symbolName: symbolName,
             sourceBadge: sourceBadge,
             source: source,
+            launchTarget: launchTarget(forSource: source),
             expiresAt: expiresAt,
             updatedAt: updatedAt
         )
@@ -1112,6 +1116,11 @@ final class AppModel: ObservableObject {
 
     private func syncWaitingBubble(at date: Date) {
         guard currentState == .waitingForUser else {
+            removeWaitingBubble()
+            isWaitingBubbleDismissed = false
+            return
+        }
+        guard !isWaitingBubbleDismissed else {
             removeWaitingBubble()
             return
         }
@@ -1132,6 +1141,18 @@ final class AppModel: ObservableObject {
 
     private func removeWaitingBubble() {
         overlayBubbles.removeAll { $0.id == Self.waitingBubbleID }
+        clearOverlayMessageIfNeeded()
+    }
+
+    private func clearOverlayMessageIfNeeded() {
+        guard overlayBubbles.isEmpty else {
+            return
+        }
+        overlayMessage = nil
+        overlayMessageTitle = nil
+        overlayMessageSymbolName = nil
+        overlayMessageSource = nil
+        overlayMessageExpiresAt = nil
     }
 
     private func appendedBubbleText(existing: String, next: String) -> String {
@@ -1163,11 +1184,7 @@ final class AppModel: ObservableObject {
         }
 
         if overlayBubbles.isEmpty {
-            overlayMessage = nil
-            overlayMessageTitle = nil
-            overlayMessageSymbolName = nil
-            overlayMessageSource = nil
-            overlayMessageExpiresAt = nil
+            clearOverlayMessageIfNeeded()
         }
     }
 
@@ -1343,15 +1360,181 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    private func activateRunningApplication(named appName: String) {
-        let runningApp = NSWorkspace.shared.runningApplications.first { app in
-            app.localizedName == appName
+    private func launchTarget(forSource source: String) -> OverlayLaunchTarget {
+        switch source {
+        case "codex", "codex-cli":
+            return .codexCLI
+        case "codex-app", "codex-desktop":
+            return .codexApp
+        case "lmstudio-proxy":
+            return .lmStudio
+        case "claude-code":
+            return .claudeCode
+        case "opencode-cli":
+            return .openCode
+        default:
+            return .none
         }
-        runningApp?.activate(options: [.activateAllWindows])
     }
 
-    private func activateTerminalApplication() {
-        activateRunningApplication(named: "Terminal")
+    private func openOverlayLaunchTarget(_ target: OverlayLaunchTarget) {
+        switch target {
+        case .codexCLI:
+            activateRunningCLIHost()
+        case .codexApp:
+            _ = activateApplication(
+                bundleIdentifiers: [
+                    "com.openai.codex",
+                ],
+                localizedNames: [
+                    "Codex",
+                ]
+            )
+        case .lmStudio:
+            _ = activateApplication(
+                bundleIdentifiers: [
+                    "ai.elementlabs.lmstudio",
+                    "ai.lmstudio.lmstudio",
+                    "com.lmstudio.LMStudio",
+                ],
+                localizedNames: [
+                    "LM Studio",
+                    "LMStudio",
+                ]
+            )
+        case .claudeCode:
+            activateRunningCLIHost()
+        case .openCode:
+            activateRunningCLIHost()
+        case .none:
+            break
+        }
+    }
+
+    @discardableResult
+    private func activateRunningCLIHost() -> Bool {
+        let cliHostBundleIdentifiers = [
+            "com.mitchellh.ghostty",
+            "com.apple.Terminal",
+            "com.googlecode.iterm2",
+            "dev.warp.Warp-Stable",
+            "dev.warp.Warp",
+            "com.github.wez.wezterm",
+            "net.kovidgoyal.kitty",
+            "org.alacritty",
+            "com.t3dotgg.code",
+            "com.t3dotgg.code-nightly",
+            "com.t3dotgg.t3code",
+            "com.t3dotgg.t3code-nightly",
+            "com.t3tools.t3code",
+        ]
+        let cliHostNames = [
+            "Ghostty",
+            "Terminal",
+            "iTerm",
+            "iTerm2",
+            "Warp",
+            "WezTerm",
+            "kitty",
+            "Alacritty",
+            "T3 Code",
+            "T3Code",
+            "T3 Code Nightly",
+            "T3Code Nightly",
+            "T3 Code (Nightly)",
+            "T3Code (Nightly)",
+            "t3 code",
+            "t3code",
+            "t3 code nightly",
+            "t3code nightly",
+            "t3 code (nightly)",
+            "t3code (nightly)",
+        ]
+
+        if let frontmostApp = NSWorkspace.shared.frontmostApplication,
+           isApplication(frontmostApp, bundleIdentifiers: cliHostBundleIdentifiers, localizedNames: cliHostNames) {
+            frontmostApp.activate(options: [.activateAllWindows])
+            return true
+        }
+
+        return activateRunningApplication(
+            bundleIdentifiers: cliHostBundleIdentifiers,
+            localizedNames: cliHostNames
+        )
+    }
+
+    @discardableResult
+    private func activateApplication(bundleIdentifiers: [String], localizedNames: [String]) -> Bool {
+        if activateRunningApplication(bundleIdentifiers: bundleIdentifiers, localizedNames: localizedNames) {
+            return true
+        }
+
+        for bundleIdentifier in bundleIdentifiers {
+            guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+                continue
+            }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
+            return true
+        }
+
+        for localizedName in localizedNames where launchApplication(named: localizedName) {
+            return true
+        }
+
+        return false
+    }
+
+    @discardableResult
+    private func activateRunningApplication(bundleIdentifiers: [String], localizedNames: [String]) -> Bool {
+        guard let runningApp = NSWorkspace.shared.runningApplications.first(where: { app in
+            isApplication(app, bundleIdentifiers: bundleIdentifiers, localizedNames: localizedNames)
+        }) else {
+            return false
+        }
+
+        runningApp.activate(options: [.activateAllWindows])
+        return true
+    }
+
+    private func isApplication(
+        _ app: NSRunningApplication,
+        bundleIdentifiers: [String],
+        localizedNames: [String]
+    ) -> Bool {
+        let normalizedNames = localizedNames.map(normalizedApplicationName)
+        if let bundleIdentifier = app.bundleIdentifier,
+           bundleIdentifiers.contains(bundleIdentifier) {
+            return true
+        }
+        guard let localizedName = app.localizedName else {
+            return false
+        }
+        let normalizedRunningName = normalizedApplicationName(localizedName)
+        return normalizedNames.contains(normalizedRunningName)
+    }
+
+    private func launchApplication(named name: String) -> Bool {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/open")
+        process.arguments = ["-a", name]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func normalizedApplicationName(_ name: String) -> String {
+        name
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
     }
 
     private func updateActivityTitle(for event: CompanionEvent) {

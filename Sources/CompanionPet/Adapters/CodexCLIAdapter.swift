@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 actor AdapterHealthStore {
@@ -177,6 +178,19 @@ final class CodexCLIAdapter: CompanionAdapter, @unchecked Sendable {
         }
     }
 
+    func openTerminalSession(workingDirectory: URL? = nil) {
+        let directory = workingDirectory ?? URL(filePath: settings.workingDirectoryPath)
+        let command = "cd \(quotedShellArgument(directory.path())) && \(quotedShellArgument(settings.executablePath))"
+        let script = """
+        tell application "Terminal"
+            activate
+            do script \(quotedAppleScriptString(command))
+        end tell
+        """
+        let appleScript = NSAppleScript(source: script)
+        appleScript?.executeAndReturnError(nil)
+    }
+
     private func handleTermination(for processID: UUID, status: Int32, stderrCollector: StderrCollector) async {
         let isStopped = await processRegistry.remove(id: processID)
 
@@ -223,6 +237,14 @@ final class CodexCLIAdapter: CompanionAdapter, @unchecked Sendable {
 
             try? await Task.sleep(for: .seconds(1))
         }
+    }
+
+    private func quotedShellArgument(_ text: String) -> String {
+        "'\(text.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
+    private func quotedAppleScriptString(_ text: String) -> String {
+        "\"\(text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 
     private func pollSessions(at directory: URL, cursor: inout SessionCursor) async throws {

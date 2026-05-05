@@ -73,12 +73,14 @@ struct OverlayBubbleView: View {
                         title: bubble.title,
                         text: bubble.text,
                         symbolName: bubble.symbolName,
-                        sourceBadge: bubble.sourceBadge
-                    )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            appModel.handleOverlayBubbleTap(id: bubble.id, source: bubble.source)
+                        sourceBadge: bubble.sourceBadge,
+                        onTap: {
+                            appModel.handleOverlayBubbleTap(id: bubble.id)
+                        },
+                        onClose: {
+                            appModel.dismissOverlayBubble(id: bubble.id)
                         }
+                    )
                 }
             }
             .padding(6)
@@ -97,6 +99,10 @@ private struct SpeechBubbleView: View {
     let text: String
     let symbolName: String?
     let sourceBadge: OverlaySourceBadge
+    let onTap: () -> Void
+    let onClose: () -> Void
+
+    @State private var isHovered = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 7) {
@@ -119,6 +125,7 @@ private struct SpeechBubbleView: View {
                 }
                 .scrollIndicators(.automatic)
                 .frame(maxHeight: title == nil ? 48 : 34)
+                .simultaneousGesture(TapGesture().onEnded(onTap))
             }
 
             BubbleSourceBadgeView(badge: sourceBadge)
@@ -133,6 +140,26 @@ private struct SpeechBubbleView: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(.white.opacity(0.55), lineWidth: 1)
             }
+            .overlay(alignment: .topLeading) {
+                if isHovered {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18, height: 18)
+                            .background(.regularMaterial, in: Circle())
+                            .overlay {
+                                Circle()
+                                    .stroke(.white.opacity(0.5), lineWidth: 0.75)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close bubble")
+                    .help("Close bubble")
+                    .padding(5)
+                    .transition(.opacity.combined(with: .scale(scale: 0.88)))
+                }
+            }
             .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
             .overlay(alignment: .bottomTrailing) {
                 SpeechBubbleTail()
@@ -143,6 +170,10 @@ private struct SpeechBubbleView: View {
             }
             .frame(maxWidth: 270, alignment: .leading)
             .frame(height: 98, alignment: .topLeading)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
+            .onHover { isHovered = $0 }
+            .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 }
 
