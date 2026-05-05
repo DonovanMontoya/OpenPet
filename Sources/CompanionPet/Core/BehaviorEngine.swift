@@ -129,8 +129,8 @@ final class CompanionBehaviorEngine {
             activeToolCount = 0
             isThinking = false
             isStreaming = false
-            waitingForUser = true
-            scheduleTransient(.success, until: now.addingTimeInterval(1.5), followup: .waitingForUser)
+            waitingForUser = false
+            scheduleTransient(.success, until: now.addingTimeInterval(1.5), followup: .idle)
             scheduleAmbient(from: now)
         case .userWaiting:
             waitingForUser = true
@@ -219,15 +219,14 @@ final class CompanionBehaviorEngine {
             return .thinking
         }
 
+        if waitingForUser {
+            return .waitingForUser
+        }
+
         if let referenceDate = activityReferenceDate(), now.timeIntervalSince(referenceDate) >= Self.sleepAfterSeconds {
             return .sleeping
         }
 
-        if waitingForUser, let lastEventAt, now.timeIntervalSince(lastEventAt) < 5 {
-            return .waitingForUser
-        }
-
-        waitingForUser = false
         return .idle
     }
 
@@ -239,12 +238,6 @@ final class CompanionBehaviorEngine {
         }
         if let nextAmbientAt {
             candidates.append(nextAmbientAt)
-        }
-        if let lastEventAt {
-            let waitDeadline = lastEventAt.addingTimeInterval(5)
-            if waitDeadline > now {
-                candidates.append(waitDeadline)
-            }
         }
         if let referenceDate = activityReferenceDate() {
             let sleepDeadline = referenceDate.addingTimeInterval(Self.sleepAfterSeconds)

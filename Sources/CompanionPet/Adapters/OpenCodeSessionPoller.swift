@@ -6,26 +6,33 @@ actor OpenCodeSessionPoller {
         var sessionID: String?
         var lastModifiedAt: Date?
         var parser = OpenCodeExportParser()
-        var didSkipInitialExport = false
+        var didSeedInitialExport = false
     }
 
     private let executablePath: String
-    private let storageDirectory: URL
+    private let storageDirectories: [URL]
     private let fileManager: FileManager
     private var cursor = SessionCursor()
 
-    init(
-        executablePath: String,
-        storageDirectory: URL = URL(filePath: NSHomeDirectory())
+    private static func defaultStorageDirectories() -> [URL] {
+        let base = URL(filePath: NSHomeDirectory())
             .appending(path: ".local", directoryHint: .isDirectory)
             .appending(path: "share", directoryHint: .isDirectory)
             .appending(path: "opencode", directoryHint: .isDirectory)
             .appending(path: "storage", directoryHint: .isDirectory)
-            .appending(path: "session", directoryHint: .isDirectory),
+        return [
+            base.appending(path: "session_diff", directoryHint: .isDirectory),
+            base.appending(path: "session", directoryHint: .isDirectory),
+        ]
+    }
+
+    init(
+        executablePath: String,
+        storageDirectories: [URL] = OpenCodeSessionPoller.defaultStorageDirectories(),
         fileManager: FileManager = .default
     ) {
         self.executablePath = executablePath
-        self.storageDirectory = storageDirectory
+        self.storageDirectories = storageDirectories
         self.fileManager = fileManager
     }
 
@@ -38,8 +45,15 @@ actor OpenCodeSessionPoller {
         let modifiedAt = values.contentModificationDate ?? .distantPast
         let sessionID = latestFile.deletingPathExtension().lastPathComponent
 
+        let isInitialSession = cursor.fileURL == nil
         if cursor.fileURL != latestFile || cursor.sessionID != sessionID {
-            cursor = SessionCursor(fileURL: latestFile, sessionID: sessionID, lastModifiedAt: nil, parser: OpenCodeExportParser())
+            cursor = SessionCursor(
+                fileURL: latestFile,
+                sessionID: sessionID,
+                lastModifiedAt: nil,
+                parser: OpenCodeExportParser(),
+                didSeedInitialExport: !isInitialSession
+            )
         }
 
         guard cursor.lastModifiedAt != modifiedAt else {
@@ -47,30 +61,34 @@ actor OpenCodeSessionPoller {
         }
 
         cursor.lastModifiedAt = modifiedAt
-        if !cursor.didSkipInitialExport {
-            cursor.didSkipInitialExport = true
+        let exportText = try exportSession(sessionID: sessionID)
+        let events = cursor.parser.parse(exportText: exportText, source: source)
+
+        if !cursor.didSeedInitialExport {
+            cursor.didSeedInitialExport = true
             return []
         }
 
-        let exportText = try exportSession(sessionID: sessionID)
-        return cursor.parser.parse(exportText: exportText, source: source)
+        return events
     }
 
     private func latestSessionFile() throws -> URL? {
-        guard fileManager.fileExists(atPath: storageDirectory.path()),
-              let enumerator = fileManager.enumerator(
-                at: storageDirectory,
-                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-                options: [.skipsHiddenFiles]
-              ) else {
-            return nil
-        }
-
         var files: [URL] = []
-        for case let fileURL as URL in enumerator {
-            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
-            if values.isRegularFile == true, fileURL.lastPathComponent.hasPrefix("ses_"), fileURL.pathExtension == "json" {
-                files.append(fileURL)
+
+        for directory in storageDirectories {
+            guard fileManager.fileExists(atPath: directory.path()),
+                  let enumerator = fileManager.enumerator(
+                    at: directory,
+                    includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+                    options: [.skipsHiddenFiles]
+                  ) else {
+                continue
+            }
+            for case let fileURL as URL in enumerator {
+                let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+                if values.isRegularFile == true, fileURL.lastPathComponent.hasPrefix("ses_"), fileURL.pathExtension == "json" {
+                    files.append(fileURL)
+                }
             }
         }
 

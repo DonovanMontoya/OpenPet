@@ -7,9 +7,21 @@ struct OverlayBubble: Identifiable, Equatable {
     var title: String?
     var text: String
     var symbolName: String?
+    var sourceBadge: OverlaySourceBadge
     var source: String
     var expiresAt: Date?
     var updatedAt: Date
+}
+
+struct OverlaySourceBadge: Equatable {
+    var label: String
+    var symbolName: String
+    var accessibilityLabel: String
+}
+
+private enum OverlayBubbleUpdateMode {
+    case replace
+    case append
 }
 
 @MainActor
@@ -61,8 +73,10 @@ final class AppModel: ObservableObject {
     private var isDraggingOverlay = false
     private var activityTitlesByKey: [String: String] = [:]
     private var overlayActivitySourcesByKey: [String: String] = [:]
+    private var waitingBubbleSource: String?
     private var lastWaveAt: Date?
     private static let waveCooldownSeconds: TimeInterval = 6.0
+    private static let waitingBubbleID = "openpet.waiting_for_user"
 
     private init() {
         self.settings = settingsStore.load()
@@ -305,7 +319,21 @@ final class AppModel: ObservableObject {
         settings.showsSpeechBubbles && !overlayBubbles.isEmpty
     }
 
-    func handleOverlayBubbleTap(source: String?) {
+    func handleOverlayBubbleTap(id: String, source: String?) {
+        if let bubble = overlayBubbles.first(where: { $0.id == id }),
+           bubble.symbolName == "checkmark.circle.fill" {
+            overlayBubbles.removeAll { $0.id == id }
+            if overlayBubbles.isEmpty {
+                overlayMessage = nil
+                overlayMessageTitle = nil
+                overlayMessageSymbolName = nil
+                overlayMessageSource = nil
+                overlayMessageExpiresAt = nil
+            }
+            applyOverlaySettings(selectedPetChanged: false)
+            return
+        }
+
         guard let source else {
             return
         }
@@ -852,6 +880,7 @@ final class AppModel: ObservableObject {
         }
 
         expireOverlayBubbles(at: date)
+        syncWaitingBubble(at: date)
 
         scheduleWake(for: snapshot.nextWakeAt)
         applyOverlaySettings(selectedPetChanged: false)
@@ -910,6 +939,7 @@ final class AppModel: ObservableObject {
         let message: String?
         let title: String?
         let symbolName: String?
+        let updateMode: OverlayBubbleUpdateMode
         let duration: TimeInterval
         let keepsBubbleVisible: Bool
 
@@ -918,24 +948,28 @@ final class AppModel: ObservableObject {
             message = event.payload["message"] ?? "Nice progress."
             title = nil
             symbolName = event.kind == .buildSucceeded ? "checkmark.circle.fill" : nil
+            updateMode = .append
             duration = 2
             keepsBubbleVisible = false
         case .buildStarted, .codingStarted, .focusStarted:
             message = event.payload["message"] ?? "Working..."
             title = nil
             symbolName = "progress"
+            updateMode = .append
             duration = 0
             keepsBubbleVisible = true
         case .buildFailed:
             message = event.payload["message"] ?? "Build or tests failed."
             title = nil
             symbolName = nil
+            updateMode = .append
             duration = 4
             keepsBubbleVisible = false
         case .codingStopped:
             message = event.payload["message"] ?? "Coding rhythm stopped."
             title = nil
             symbolName = nil
+            updateMode = .append
             duration = 2
             keepsBubbleVisible = false
         case .adapterConnected:
@@ -945,55 +979,72 @@ final class AppModel: ObservableObject {
             message = event.payload["message"] ?? "\(sourceLabel(for: event.source)) connected"
             title = nil
             symbolName = nil
+            updateMode = .replace
             duration = 2
             keepsBubbleVisible = false
         case .thinkingStarted:
             message = thinkingBubbleText(for: event)
             title = nil
             symbolName = "progress"
+            updateMode = .replace
             duration = 0
             keepsBubbleVisible = true
         case .toolStarted:
             message = toolBubbleText(for: event)
             title = currentActivityTitle(for: event) ?? previousActivityTitle
             symbolName = "progress"
+            updateMode = .append
             duration = 0
             keepsBubbleVisible = true
         case .streamStarted:
             message = "\(sourceLabel(for: event.source)) replying..."
             title = currentActivityTitle(for: event) ?? previousActivityTitle
             symbolName = "progress"
+            updateMode = .append
             duration = 0
             keepsBubbleVisible = true
         case .streamDelta:
             message = event.payload["text"].flatMap(truncatedBubbleText) ?? genericStreamBubble(for: event)
             title = currentActivityTitle(for: event) ?? previousActivityTitle
             symbolName = "progress"
+            updateMode = .replace
             duration = 0
             keepsBubbleVisible = true
         case .error:
             message = event.payload["message"].flatMap(truncatedBubbleText) ?? "Something failed."
             title = currentActivityTitle(for: event) ?? previousActivityTitle
             symbolName = nil
+            updateMode = .append
             duration = hasActiveOverlayActivity ? 0 : 4
             keepsBubbleVisible = hasActiveOverlayActivity
         case .sessionEnded:
             message = "Done."
             title = previousActivityTitle
             symbolName = "checkmark.circle.fill"
-            duration = 5
+            updateMode = .append
+            duration = 12
             keepsBubbleVisible = false
             clearActivityTitle(for: event)
+        case .userWaiting:
+            message = "Waiting for your input."
+            title = sourceLabel(for: event.source)
+            symbolName = "questionmark.circle.fill"
+            updateMode = .replace
+            duration = 0
+            keepsBubbleVisible = true
+            waitingBubbleSource = event.source
         case .adapterDisconnected:
             message = event.payload["message"].flatMap(truncatedBubbleText) ?? "\(sourceLabel(for: event.source)) disconnected"
             title = nil
             symbolName = nil
+            updateMode = .append
             duration = 4
             keepsBubbleVisible = false
         default:
             message = nil
             title = nil
             symbolName = nil
+            updateMode = .replace
             duration = 0
             keepsBubbleVisible = false
         }
@@ -1011,9 +1062,11 @@ final class AppModel: ObservableObject {
             title: title,
             text: message,
             symbolName: symbolName,
+            sourceBadge: sourceBadge(for: event),
             source: event.source,
             expiresAt: keepsBubbleVisible ? nil : event.timestamp.addingTimeInterval(duration),
-            updatedAt: event.timestamp
+            updatedAt: event.timestamp,
+            updateMode: updateMode
         )
     }
 
@@ -1022,15 +1075,26 @@ final class AppModel: ObservableObject {
         title: String?,
         text: String,
         symbolName: String?,
+        sourceBadge: OverlaySourceBadge,
         source: String,
         expiresAt: Date?,
-        updatedAt: Date
+        updatedAt: Date,
+        updateMode: OverlayBubbleUpdateMode
     ) {
+        let resolvedText: String
+        if updateMode == .append,
+           let existing = overlayBubbles.first(where: { $0.id == id })?.text {
+            resolvedText = appendedBubbleText(existing: existing, next: text)
+        } else {
+            resolvedText = text
+        }
+
         let bubble = OverlayBubble(
             id: id,
             title: title,
-            text: text,
+            text: resolvedText,
             symbolName: symbolName,
+            sourceBadge: sourceBadge,
             source: source,
             expiresAt: expiresAt,
             updatedAt: updatedAt
@@ -1044,6 +1108,50 @@ final class AppModel: ObservableObject {
         overlayBubbles.sort { lhs, rhs in
             lhs.updatedAt > rhs.updatedAt
         }
+    }
+
+    private func syncWaitingBubble(at date: Date) {
+        guard currentState == .waitingForUser else {
+            removeWaitingBubble()
+            return
+        }
+
+        let source = waitingBubbleSource ?? "openpet-manual"
+        upsertOverlayBubble(
+            id: Self.waitingBubbleID,
+            title: sourceLabel(for: source),
+            text: "Waiting for your input.",
+            symbolName: "questionmark.circle.fill",
+            sourceBadge: sourceBadge(forSource: source, modelId: nil),
+            source: source,
+            expiresAt: nil,
+            updatedAt: date,
+            updateMode: .replace
+        )
+    }
+
+    private func removeWaitingBubble() {
+        overlayBubbles.removeAll { $0.id == Self.waitingBubbleID }
+    }
+
+    private func appendedBubbleText(existing: String, next: String) -> String {
+        let compactNext = next.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compactNext.isEmpty else {
+            return existing
+        }
+
+        let lines = existing
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+        if lines.last?.trimmingCharacters(in: .whitespacesAndNewlines) == compactNext {
+            return existing
+        }
+
+        let combined = existing.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !combined.isEmpty else {
+            return compactNext
+        }
+        return combined + "\n" + compactNext
     }
 
     private func expireOverlayBubbles(at date: Date) {
@@ -1153,6 +1261,81 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func sourceBadge(for event: CompanionEvent) -> OverlaySourceBadge {
+        sourceBadge(forSource: event.source, modelId: event.modelId ?? event.payload["model"])
+    }
+
+    private func sourceBadge(forSource source: String, modelId: String?) -> OverlaySourceBadge {
+        let label = sourceBadgeLabel(source: source, modelId: modelId)
+        let sourceName = sourceLabel(for: source)
+        let accessibleModel = modelId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let accessibilityLabel: String
+        if let accessibleModel, !accessibleModel.isEmpty {
+            accessibilityLabel = "\(sourceName), \(accessibleModel)"
+        } else {
+            accessibilityLabel = sourceName
+        }
+
+        return OverlaySourceBadge(
+            label: label,
+            symbolName: sourceBadgeSymbol(for: source),
+            accessibilityLabel: accessibilityLabel
+        )
+    }
+
+    private func sourceBadgeLabel(source: String, modelId: String?) -> String {
+        if let modelId {
+            let compact = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !compact.isEmpty {
+                return compactModelLabel(compact)
+            }
+        }
+
+        switch source {
+        case "codex", "codex-cli", "codex-app", "codex-desktop":
+            return "Codex"
+        case "lmstudio-proxy":
+            return "LM"
+        case "claude-code":
+            return "Claude"
+        case "opencode-cli":
+            return "OpenCode"
+        case "openpet-manual":
+            return "OpenPet"
+        default:
+            return source
+        }
+    }
+
+    private func compactModelLabel(_ modelId: String) -> String {
+        let tail = modelId
+            .split(whereSeparator: { $0 == "/" || $0 == ":" || $0 == "\\" })
+            .last
+            .map(String.init) ?? modelId
+        let compact = tail
+            .replacingOccurrences(of: "-instruct", with: "")
+            .replacingOccurrences(of: "-chat", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+        return truncatedText(compact, limit: 14)
+    }
+
+    private func sourceBadgeSymbol(for source: String) -> String {
+        switch source {
+        case "codex", "codex-cli", "codex-app", "codex-desktop":
+            return "terminal.fill"
+        case "lmstudio-proxy":
+            return "cpu.fill"
+        case "claude-code":
+            return "curlybraces"
+        case "opencode-cli":
+            return "chevron.left.forwardslash.chevron.right"
+        case "openpet-manual":
+            return "pawprint.fill"
+        default:
+            return "sparkles"
+        }
+    }
+
     private func genericStreamBubble(for event: CompanionEvent) -> String? {
         if event.source == "lmstudio-proxy", event.payload["bytes"] != nil {
             return "LM Studio replying..."
@@ -1194,6 +1377,8 @@ final class AppModel: ObservableObject {
         switch event.kind {
         case .sessionStarted, .thinkingStarted, .toolStarted, .streamStarted, .buildStarted, .codingStarted, .focusStarted:
             overlayActivitySourcesByKey[key] = event.source
+            removeWaitingBubble()
+            waitingBubbleSource = nil
         case .sessionEnded, .buildSucceeded, .buildFailed, .codingStopped, .focusBreak:
             overlayActivitySourcesByKey.removeValue(forKey: key)
         case .adapterDisconnected:

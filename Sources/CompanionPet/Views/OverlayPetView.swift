@@ -69,10 +69,15 @@ struct OverlayBubbleView: View {
         } else {
             VStack(alignment: .trailing, spacing: 8) {
                 ForEach(appModel.overlayBubbles) { bubble in
-                    SpeechBubbleView(title: bubble.title, text: bubble.text, symbolName: bubble.symbolName)
+                    SpeechBubbleView(
+                        title: bubble.title,
+                        text: bubble.text,
+                        symbolName: bubble.symbolName,
+                        sourceBadge: bubble.sourceBadge
+                    )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            appModel.handleOverlayBubbleTap(source: bubble.source)
+                            appModel.handleOverlayBubbleTap(id: bubble.id, source: bubble.source)
                         }
                 }
             }
@@ -91,6 +96,7 @@ private struct SpeechBubbleView: View {
     let title: String?
     let text: String
     let symbolName: String?
+    let sourceBadge: OverlaySourceBadge
 
     var body: some View {
         HStack(alignment: .top, spacing: 7) {
@@ -114,6 +120,8 @@ private struct SpeechBubbleView: View {
                 .scrollIndicators(.automatic)
                 .frame(maxHeight: title == nil ? 48 : 34)
             }
+
+            BubbleSourceBadgeView(badge: sourceBadge)
         }
             .foregroundStyle(.primary.opacity(0.96))
             .multilineTextAlignment(.leading)
@@ -135,6 +143,32 @@ private struct SpeechBubbleView: View {
             }
             .frame(maxWidth: 270, alignment: .leading)
             .frame(height: 98, alignment: .topLeading)
+    }
+}
+
+private struct BubbleSourceBadgeView: View {
+    let badge: OverlaySourceBadge
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: badge.symbolName)
+                .font(.system(size: 8, weight: .bold))
+                .symbolRenderingMode(.hierarchical)
+
+            Text(badge.label)
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .lineLimit(1)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(.regularMaterial, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(.white.opacity(0.45), lineWidth: 0.75)
+        }
+        .frame(maxWidth: 72, alignment: .trailing)
+        .accessibilityLabel(badge.accessibilityLabel)
     }
 }
 

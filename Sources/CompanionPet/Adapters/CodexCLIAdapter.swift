@@ -151,13 +151,13 @@ final class CodexCLIAdapter: CompanionAdapter, @unchecked Sendable {
                 for try await line in stdout.fileHandleForReading.bytes.lines {
                     let events = parser.parse(line: line, source: self.id)
                     for event in events {
-                        self.channel.send(event)
+                        self.channel.send(event.withModelID(model))
                     }
                 }
 
                 let trailingEvents = parser.finishPending(source: self.id)
                 for event in trailingEvents {
-                    self.channel.send(event)
+                    self.channel.send(event.withModelID(model))
                 }
             } catch {
                 self.channel.send(

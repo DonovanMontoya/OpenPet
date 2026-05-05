@@ -33,14 +33,21 @@ struct BehaviorEngineTests {
         )
         #expect(success.currentState == .success)
 
-        let waiting = engine.advance(to: baseDate.addingTimeInterval(5.6))
-        #expect(waiting.currentState == .waitingForUser)
-
-        let idle = engine.advance(to: baseDate.addingTimeInterval(9.2))
+        let idle = engine.advance(to: baseDate.addingTimeInterval(5.6))
         #expect(idle.currentState == .idle)
 
-        let ambient = engine.advance(to: baseDate.addingTimeInterval(64.1))
-        #expect(ambient.currentState == .ambient)
+        let waiting = engine.handle(
+            event: CompanionEvent(source: "test", kind: .userWaiting, timestamp: baseDate.addingTimeInterval(6))
+        )
+        #expect(waiting.currentState == .waitingForUser)
+
+        let stillWaiting = engine.advance(to: baseDate.addingTimeInterval(90))
+        #expect(stillWaiting.currentState == .waitingForUser)
+
+        let nextTurn = engine.handle(
+            event: CompanionEvent(source: "test", kind: .thinkingStarted, timestamp: baseDate.addingTimeInterval(91))
+        )
+        #expect(nextTurn.currentState == .thinking)
     }
 
     @Test

@@ -113,10 +113,7 @@ struct PetLibrary {
     }
 
     func loadBuiltInPet() throws -> PetPack {
-        guard let manifestURL = Bundle.module.url(
-            forResource: "pet",
-            withExtension: "json"
-        ) else {
+        guard let manifestURL = builtInManifestURL() else {
             throw PetLibraryError.missingBuiltInManifest
         }
 
@@ -147,6 +144,20 @@ struct PetLibrary {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .useDefaultKeys
         return try decoder.decode(PetManifest.self, from: data)
+    }
+
+    private func builtInManifestURL() -> URL? {
+        if let url = Bundle.module.url(forResource: "pet", withExtension: "json") {
+            return url
+        }
+
+        guard let resourceBundleURL = Bundle.main.resourceURL?
+            .appending(path: "CompanionPet_CompanionPet.bundle", directoryHint: .isDirectory),
+              let resourceBundle = Bundle(url: resourceBundleURL) else {
+            return nil
+        }
+
+        return resourceBundle.url(forResource: "pet", withExtension: "json")
     }
 
     private func decodeCodexManifest(at url: URL) throws -> CodexPetManifest {

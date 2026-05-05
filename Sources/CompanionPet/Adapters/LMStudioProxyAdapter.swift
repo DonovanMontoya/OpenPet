@@ -118,14 +118,16 @@ final class LMStudioProxyAdapter: CompanionAdapter, @unchecked Sendable {
         let sessionID = UUID().uuidString
         let requestStartedAt = Date.now
         let promptSummary = requestPromptSummary(from: request.body)
+        let modelID = requestModelID(from: request.body)
 
-        channel.send(CompanionEvent(source: id, kind: .sessionStarted, timestamp: requestStartedAt, sessionId: sessionID))
+        channel.send(CompanionEvent(source: id, kind: .sessionStarted, timestamp: requestStartedAt, sessionId: sessionID, modelId: modelID))
         channel.send(
             CompanionEvent(
                 source: id,
                 kind: .thinkingStarted,
                 timestamp: requestStartedAt,
                 sessionId: sessionID,
+                modelId: modelID,
                 payload: promptSummary.map { ["text": $0] } ?? [:]
             )
         )
@@ -140,8 +142,8 @@ final class LMStudioProxyAdapter: CompanionAdapter, @unchecked Sendable {
                 }
 
                 await healthStore.set(AdapterHealth.connected)
-                channel.send(CompanionEvent(source: id, kind: .adapterConnected, sessionId: sessionID))
-                channel.send(CompanionEvent(source: id, kind: .streamStarted, sessionId: sessionID))
+                channel.send(CompanionEvent(source: id, kind: .adapterConnected, sessionId: sessionID, modelId: modelID))
+                channel.send(CompanionEvent(source: id, kind: .streamStarted, sessionId: sessionID, modelId: modelID))
 
                 let headers = responseHeaders(for: httpResponse, streaming: true)
                 let stream = AsyncStream<Data> { continuation in
@@ -161,6 +163,7 @@ final class LMStudioProxyAdapter: CompanionAdapter, @unchecked Sendable {
                                             source: self.id,
                                             kind: .streamDelta,
                                             sessionId: sessionID,
+                                            modelId: modelID,
                                             payload: self.streamPayload(bytes: chunk.count, text: text)
                                         )
                                     )
@@ -176,14 +179,15 @@ final class LMStudioProxyAdapter: CompanionAdapter, @unchecked Sendable {
                                         source: self.id,
                                         kind: .streamDelta,
                                         sessionId: sessionID,
+                                        modelId: modelID,
                                         payload: self.streamPayload(bytes: chunk.count, text: text)
                                     )
                                 )
                             }
 
                             continuation.finish()
-                            self.channel.send(CompanionEvent(source: self.id, kind: .streamFinished, sessionId: sessionID))
-                            self.channel.send(CompanionEvent(source: self.id, kind: .sessionEnded, sessionId: sessionID))
+                            self.channel.send(CompanionEvent(source: self.id, kind: .streamFinished, sessionId: sessionID, modelId: modelID))
+                            self.channel.send(CompanionEvent(source: self.id, kind: .sessionEnded, sessionId: sessionID, modelId: modelID))
                         } catch {
                             continuation.finish()
                             await self.handleForwardingError(error, sessionID: sessionID)
@@ -200,8 +204,8 @@ final class LMStudioProxyAdapter: CompanionAdapter, @unchecked Sendable {
             }
 
             await healthStore.set(AdapterHealth.connected)
-            channel.send(CompanionEvent(source: id, kind: .adapterConnected, sessionId: sessionID))
-            channel.send(CompanionEvent(source: id, kind: .streamStarted, sessionId: sessionID))
+            channel.send(CompanionEvent(source: id, kind: .adapterConnected, sessionId: sessionID, modelId: modelID))
+            channel.send(CompanionEvent(source: id, kind: .streamStarted, sessionId: sessionID, modelId: modelID))
             if !data.isEmpty {
                 let text = responseText(fromJSONData: data)
                 channel.send(
@@ -209,12 +213,13 @@ final class LMStudioProxyAdapter: CompanionAdapter, @unchecked Sendable {
                         source: id,
                         kind: .streamDelta,
                         sessionId: sessionID,
+                        modelId: modelID,
                         payload: streamPayload(bytes: data.count, text: text)
                     )
                 )
             }
-            channel.send(CompanionEvent(source: id, kind: .streamFinished, sessionId: sessionID))
-            channel.send(CompanionEvent(source: id, kind: .sessionEnded, sessionId: sessionID))
+            channel.send(CompanionEvent(source: id, kind: .streamFinished, sessionId: sessionID, modelId: modelID))
+            channel.send(CompanionEvent(source: id, kind: .sessionEnded, sessionId: sessionID, modelId: modelID))
 
             return HTTPResponse(statusCode: httpResponse.statusCode, headers: responseHeaders(for: httpResponse, streaming: false), body: data)
         } catch {
@@ -311,6 +316,16 @@ final class LMStudioProxyAdapter: CompanionAdapter, @unchecked Sendable {
             payload["text"] = text
         }
         return payload
+    }
+
+    private func requestModelID(from data: Data) -> String? {
+        guard !data.isEmpty,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let model = json["model"] as? String else {
+            return nil
+        }
+        let compact = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return compact.isEmpty ? nil : compact
     }
 
     private func requestPromptSummary(from data: Data) -> String? {

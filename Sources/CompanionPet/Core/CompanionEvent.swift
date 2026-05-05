@@ -63,6 +63,21 @@ struct CompanionEvent: Codable, Equatable, Sendable {
         self.modelId = modelId
         self.payload = payload
     }
+
+    func withModelID(_ modelId: String?) -> CompanionEvent {
+        guard let modelId else {
+            return self
+        }
+
+        let compact = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty, self.modelId == nil else {
+            return self
+        }
+
+        var event = self
+        event.modelId = compact
+        return event
+    }
 }
 
 enum AdapterHealthState: String, Codable, Sendable {
