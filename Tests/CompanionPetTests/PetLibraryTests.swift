@@ -9,8 +9,32 @@ struct PetLibraryTests {
         let library = PetLibrary()
         let pack = try library.loadBuiltInPet()
 
-        #expect(pack.manifest.id == "orbiter")
+        #expect(pack.manifest.id == BuiltInPet.defaultID)
         #expect(pack.manifest.resolvedState(named: .idle) != nil)
+        #expect(pack.source == .builtIn)
+    }
+
+    @Test
+    func legacyBuiltInPetIdentifierStillResolves() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let customDirectory = root.appending(path: "OpenPet", directoryHint: .isDirectory)
+        let codexDirectory = root.appending(path: ".codex/pets", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: customDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: codexDirectory, withIntermediateDirectories: true)
+
+        let library = PetLibrary()
+        let loadedPack = try library.loadPet(
+            id: "orbiter",
+            customDirectory: customDirectory,
+            codexDirectory: codexDirectory
+        )
+        let pack = try #require(loadedPack)
+
+        #expect(pack.id == BuiltInPet.defaultID)
         #expect(pack.source == .builtIn)
     }
 

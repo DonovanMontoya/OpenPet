@@ -1,8 +1,17 @@
 import Foundation
 
+enum BuiltInPet {
+    static let defaultID = "violet"
+    static let legacyIDs: Set<String> = ["orbiter"]
+
+    static func matches(_ id: String) -> Bool {
+        id == defaultID || legacyIDs.contains(id)
+    }
+}
+
 struct PetLibrary {
     func loadPet(id: String, customDirectory: URL, codexDirectory: URL? = nil) throws -> PetPack? {
-        if id == "orbiter" {
+        if BuiltInPet.matches(id) {
             return try loadBuiltInPet()
         }
 
@@ -117,7 +126,10 @@ struct PetLibrary {
             throw PetLibraryError.missingBuiltInManifest
         }
 
-        let manifest = try decodeManifest(at: manifestURL)
+        let manifest = try decodeAnyManifest(
+            at: manifestURL,
+            directoryURL: manifestURL.deletingLastPathComponent()
+        )
         let errors = manifest.validationErrors()
         guard errors.isEmpty else {
             throw PetLibraryError.invalidManifest(errors.joined(separator: " "))
@@ -147,7 +159,7 @@ struct PetLibrary {
     }
 
     private func builtInManifestURL() -> URL? {
-        if let url = Bundle.module.url(forResource: "pet", withExtension: "json") {
+        if let url = Bundle.module.resourceURL?.appending(path: "pet.json") {
             return url
         }
 
@@ -157,7 +169,7 @@ struct PetLibrary {
             return nil
         }
 
-        return resourceBundle.url(forResource: "pet", withExtension: "json")
+        return resourceBundle.resourceURL?.appending(path: "pet.json")
     }
 
     private func decodeCodexManifest(at url: URL) throws -> CodexPetManifest {

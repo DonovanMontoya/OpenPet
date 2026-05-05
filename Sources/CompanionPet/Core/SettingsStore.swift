@@ -78,7 +78,7 @@ struct CompanionSettings: Codable, Equatable, Sendable {
     var isLocked: Bool = false
     var reducedMotion: Bool = false
     var showsSpeechBubbles: Bool = true
-    var selectedPetID: String = "orbiter"
+    var selectedPetID: String = BuiltInPet.defaultID
     var overlayScalePreset: OverlayScalePreset = .medium
     var overlayPlacement: OverlayPlacement?
     var codex: CodexAdapterSettings = .init()
