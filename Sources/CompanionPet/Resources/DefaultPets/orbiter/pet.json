@@ -1,0 +1,114 @@
+{
+  "id": "orbiter",
+  "displayName": "Orbiter",
+  "description": "A compact built-in companion pet with a simple symbolic animation set.",
+  "defaultScale": 1.0,
+  "anchor": {
+    "x": 0.5,
+    "y": 0.5
+  },
+  "states": [
+    {
+      "name": "idle",
+      "frames": [
+        { "kind": "symbol", "value": "sparkles", "tintHex": "#F7C35F", "backgroundHex": "#2F406E" },
+        { "kind": "symbol", "value": "sparkle", "tintHex": "#F7C35F", "backgroundHex": "#37538A" },
+        { "kind": "symbol", "value": "sparkles", "tintHex": "#F7C35F", "backgroundHex": "#2F406E" }
+      ],
+      "durationsMs": [650, 400, 650],
+      "loop": true,
+      "transitionOut": "holdLast"
+    },
+    {
+      "name": "ambient",
+      "frames": [
+        { "kind": "symbol", "value": "star.fill", "tintHex": "#FFE48D", "backgroundHex": "#4559A6" },
+        { "kind": "symbol", "value": "sparkles", "tintHex": "#FFE48D", "backgroundHex": "#546AC7" },
+        { "kind": "symbol", "value": "star.fill", "tintHex": "#FFE48D", "backgroundHex": "#4559A6" }
+      ],
+      "durationsMs": [325, 275, 325],
+      "loop": false,
+      "transitionOut": "returnToIdle"
+    },
+    {
+      "name": "thinking",
+      "frames": [
+        { "kind": "symbol", "value": "ellipsis", "tintHex": "#FFFFFF", "backgroundHex": "#2A7E85" },
+        { "kind": "symbol", "value": "ellipsis.circle.fill", "tintHex": "#FFFFFF", "backgroundHex": "#3A9DA5" }
+      ],
+      "durationsMs": [325, 325],
+      "loop": true,
+      "transitionOut": "holdLast"
+    },
+    {
+      "name": "working",
+      "frames": [
+        { "kind": "symbol", "value": "gearshape.2.fill", "tintHex": "#FFFFFF", "backgroundHex": "#7A4CA6" },
+        { "kind": "symbol", "value": "gearshape.fill", "tintHex": "#FFFFFF", "backgroundHex": "#9464C7" }
+      ],
+      "durationsMs": [300, 300],
+      "loop": true,
+      "transitionOut": "holdLast"
+    },
+    {
+      "name": "replying",
+      "frames": [
+        { "kind": "symbol", "value": "bubble.left.and.text.bubble.right.fill", "tintHex": "#FFFFFF", "backgroundHex": "#237A54" },
+        { "kind": "symbol", "value": "message.fill", "tintHex": "#FFFFFF", "backgroundHex": "#2F9669" }
+      ],
+      "durationsMs": [250, 250],
+      "loop": true,
+      "transitionOut": "holdLast"
+    },
+    {
+      "name": "success",
+      "frames": [
+        { "kind": "symbol", "value": "checkmark.circle.fill", "tintHex": "#FFFFFF", "backgroundHex": "#2A9D5B" },
+        { "kind": "symbol", "value": "sparkles", "tintHex": "#FFFFFF", "backgroundHex": "#4CCB80" }
+      ],
+      "durationsMs": [325, 325],
+      "loop": false,
+      "transitionOut": "returnToIdle"
+    },
+    {
+      "name": "error",
+      "frames": [
+        { "kind": "symbol", "value": "exclamationmark.triangle.fill", "tintHex": "#FFFFFF", "backgroundHex": "#B44A3C" },
+        { "kind": "symbol", "value": "xmark.octagon.fill", "tintHex": "#FFFFFF", "backgroundHex": "#C85A49" }
+      ],
+      "durationsMs": [325, 325],
+      "loop": false,
+      "transitionOut": "returnToIdle"
+    },
+    {
+      "name": "waiting_for_user",
+      "frames": [
+        { "kind": "symbol", "value": "hand.wave.fill", "tintHex": "#FFFFFF", "backgroundHex": "#2476A6" },
+        { "kind": "symbol", "value": "person.crop.circle.badge.questionmark", "tintHex": "#FFFFFF", "backgroundHex": "#3B92C7" }
+      ],
+      "durationsMs": [575, 575],
+      "loop": true,
+      "transitionOut": "holdLast"
+    },
+    {
+      "name": "disconnected",
+      "frames": [
+        { "kind": "symbol", "value": "wifi.slash", "tintHex": "#FFFFFF", "backgroundHex": "#5F5F70" },
+        { "kind": "symbol", "value": "antenna.radiowaves.left.and.right.slash", "tintHex": "#FFFFFF", "backgroundHex": "#78788A" }
+      ],
+      "durationsMs": [525, 525],
+      "loop": true,
+      "transitionOut": "holdLast"
+    },
+    {
+      "name": "sleeping",
+      "frames": [
+        { "kind": "symbol", "value": "moon.zzz.fill", "tintHex": "#FFFFFF", "backgroundHex": "#2E335C" },
+        { "kind": "symbol", "value": "bed.double.fill", "tintHex": "#FFFFFF", "backgroundHex": "#3E467D" }
+      ],
+      "durationsMs": [1000, 1000],
+      "loop": true,
+      "transitionOut": "holdLast"
+    }
+  ]
+}
