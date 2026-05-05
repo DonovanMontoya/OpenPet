@@ -212,12 +212,12 @@ final class CompanionBehaviorEngine {
             return .thinking
         }
 
-        if waitingForUser {
-            return .waitingForUser
-        }
-
         if let referenceDate = activityReferenceDate(), now.timeIntervalSince(referenceDate) >= Self.sleepAfterSeconds {
             return .sleeping
+        }
+
+        if waitingForUser {
+            return .waitingForUser
         }
 
         return .idle

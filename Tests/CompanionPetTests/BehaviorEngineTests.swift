@@ -191,4 +191,39 @@ struct BehaviorEngineTests {
             #expect(delta <= 30 + 0.001)
         }
     }
+
+    @Test
+    func sleepsAfterFourMinutesOfInactivity() {
+        let baseDate = Date(timeIntervalSince1970: 7_000)
+        let engine = CompanionBehaviorEngine(ambientDelayProvider: { 600 })
+
+        _ = engine.handle(event: CompanionEvent(source: "test", kind: .adapterConnected, timestamp: baseDate))
+
+        let awake = engine.advance(to: baseDate.addingTimeInterval(239))
+        #expect(awake.currentState == .idle)
+
+        let sleeping = engine.advance(to: baseDate.addingTimeInterval(240))
+        #expect(sleeping.currentState == .sleeping)
+
+        let woke = engine.recordInteraction(at: baseDate.addingTimeInterval(241))
+        #expect(woke.currentState == .idle)
+    }
+
+    @Test
+    func waitingForUserAlsoSleepsAfterFourMinutesOfInactivity() {
+        let baseDate = Date(timeIntervalSince1970: 8_000)
+        let engine = CompanionBehaviorEngine(ambientDelayProvider: { 600 })
+
+        _ = engine.handle(event: CompanionEvent(source: "test", kind: .adapterConnected, timestamp: baseDate))
+        let waiting = engine.handle(
+            event: CompanionEvent(source: "test", kind: .userWaiting, timestamp: baseDate.addingTimeInterval(1))
+        )
+        #expect(waiting.currentState == .waitingForUser)
+
+        let stillWaiting = engine.advance(to: baseDate.addingTimeInterval(240))
+        #expect(stillWaiting.currentState == .waitingForUser)
+
+        let sleeping = engine.advance(to: baseDate.addingTimeInterval(241))
+        #expect(sleeping.currentState == .sleeping)
+    }
 }
