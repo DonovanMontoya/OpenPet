@@ -18,6 +18,7 @@
 		3837D39984BB2A2093831C46 /* ClaudeCodeHookReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106D378BD440287346007E99 /* ClaudeCodeHookReceiver.swift */; };
 		547CE1539E329AD2BDDF1075 /* HostBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3846778DC2640B5CB0FB5B /* HostBinding.swift */; };
 		58A05BEF40A797D5BE94F7A2 /* AgentHostResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A99D6E2E8DC38534DDE4AE0 /* AgentHostResolver.swift */; };
+		5ADE874B7CA9F55C7D703371 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9ADF50A586AF5099439D9AB2 /* Assets.xcassets */; };
 		5D11160EC0C555178FA54B99 /* HTTPTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F793D72793BDDD090FB2CF4 /* HTTPTypes.swift */; };
 		727D2487364BE70B8C36F04F /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5980A97B1FD208D825261326 /* StatusBarController.swift */; };
 		7A65D704CFB36B4BAA1B6D35 /* PetManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE6CBB8ECF7DF116C3FF1D7D /* PetManifest.swift */; };
@@ -64,6 +65,7 @@
 		6A01DBF45DE5974D889AB4A6 /* AdapterHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdapterHost.swift; sourceTree = "<group>"; };
 		7A78F2BEB593B9B2F976B8D4 /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 		9321E603FAFF2D9C2F816543 /* ClaudeCodeAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeAdapter.swift; sourceTree = "<group>"; };
+		9ADF50A586AF5099439D9AB2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9F4C59210B985F6C5C32F28E /* OverlayGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayGeometry.swift; sourceTree = "<group>"; };
 		9F793D72793BDDD090FB2CF4 /* HTTPTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTypes.swift; sourceTree = "<group>"; };
 		B6AA228FDB825011A313016D /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
@@ -98,6 +100,7 @@
 		20A17368923132156CF49108 /* CompanionPet */ = {
 			isa = PBXGroup;
 			children = (
+				9ADF50A586AF5099439D9AB2 /* Assets.xcassets */,
 				2E9A003076EA566BC24D7D5A /* CompanionPetApp.swift */,
 				477AAD2B71959A25E60DC2FD /* Adapters */,
 				022642E20BDC7EFE12E32430 /* App */,
@@ -234,6 +237,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5ADE874B7CA9F55C7D703371 /* Assets.xcassets in Resources */,
 				2B3439CD3A09125BDC5B905C /* DefaultPets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -410,7 +414,7 @@
 		B6B9934DAD0E50285218331F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "3rd Party Mac Developer Application";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -438,7 +442,7 @@
 		D8F96EFF4509E1C3EA1EB0A2 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "3rd Party Mac Developer Application";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
