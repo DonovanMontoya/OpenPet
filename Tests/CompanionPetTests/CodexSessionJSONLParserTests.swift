@@ -64,4 +64,20 @@ struct CodexSessionJSONLParserTests {
         #expect(assistantEvents.map(\.kind) == [.streamStarted, .streamDelta])
         #expect(assistantEvents.last?.payload["text"] == "I found the real Codex breakage.")
     }
+
+    @Test
+    func sessionMetaCarriesLaunchMetadata() {
+        var parser = CodexSessionJSONLParser()
+
+        let events = parser.parse(
+            line: #"{"timestamp":"2026-05-06T20:33:34.831Z","type":"session_meta","payload":{"id":"session-ghostty","timestamp":"2026-05-06T20:33:23.787Z","cwd":"/Users/donovan/Documents","originator":"codex-tui","source":"cli"}}"#,
+            source: "codex-cli"
+        )
+
+        #expect(events.map(\.kind) == [.sessionStarted])
+        #expect(events.first?.sessionId == "session-ghostty")
+        #expect(events.first?.payload[HostBindingPayloadKey.cwd] == "/Users/donovan/Documents")
+        #expect(events.first?.payload[CodexSessionMetadata.PayloadKey.originator] == "codex-tui")
+        #expect(events.first?.payload[CodexSessionMetadata.PayloadKey.source] == "cli")
+    }
 }

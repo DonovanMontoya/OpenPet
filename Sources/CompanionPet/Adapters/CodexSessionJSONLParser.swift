@@ -5,6 +5,10 @@ struct CodexSessionJSONLParser {
     private var streamOpen = false
     private var activeTools: Set<String> = []
 
+    init(sessionID: String? = nil) {
+        self.sessionID = sessionID
+    }
+
     mutating func parse(line: String, source: String, timestamp: Date = .now) -> [CompanionEvent] {
         guard let data = line.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -58,12 +62,23 @@ struct CodexSessionJSONLParser {
             return []
         }
         sessionID = id
+        var eventPayload: [String: String] = [:]
+        if let cwd = payload["cwd"] as? String {
+            eventPayload[HostBindingPayloadKey.cwd] = cwd
+        }
+        if let originator = payload["originator"] as? String {
+            eventPayload[CodexSessionMetadata.PayloadKey.originator] = originator
+        }
+        if let source = payload["source"] as? String {
+            eventPayload[CodexSessionMetadata.PayloadKey.source] = source
+        }
         return [
             CompanionEvent(
                 source: source,
                 kind: .sessionStarted,
                 timestamp: parsedTimestamp(from: payload["timestamp"]) ?? parsedTimestamp(from: json["timestamp"]) ?? timestamp,
-                sessionId: id
+                sessionId: id,
+                payload: eventPayload
             ),
         ]
     }

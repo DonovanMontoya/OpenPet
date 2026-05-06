@@ -20,16 +20,34 @@ final class ClaudeCodeAdapter: CompanionAdapter, @unchecked Sendable {
     ) {
         self.settings = settings
         self.displayName = settings.displayName
-        self.poller = poller ?? ClaudeCodeSessionPoller()
+        let sessionRoots = Self.sessionRootDirectories(for: settings)
+        self.poller = poller ?? ClaudeCodeSessionPoller(rootDirectories: sessionRoots)
         self.hookReceiver = hookReceiver
 
         if self.hookReceiver == nil, settings.autoConfigureHooks {
             self.hookReceiver = ClaudeCodeHookReceiver(
                 port: settings.hookListenerPort,
                 source: id,
-                channel: channel
+                channel: channel,
+                settingsURLs: Self.settingsURLs(for: settings)
             )
         }
+    }
+
+    private static func sessionRootDirectories(for settings: ClaudeCodeAdapterSettings) -> [URL] {
+        var roots: [URL] = [ClaudeCodeSessionPoller.defaultRootDirectory]
+        for path in settings.additionalAgentDirectories where !path.isEmpty {
+            roots.append(URL(filePath: path).appending(path: "projects", directoryHint: .isDirectory))
+        }
+        return roots
+    }
+
+    private static func settingsURLs(for settings: ClaudeCodeAdapterSettings) -> [URL] {
+        var urls: [URL] = [ClaudeCodeHookReceiver.defaultSettingsURL]
+        for path in settings.additionalAgentDirectories where !path.isEmpty {
+            urls.append(URL(filePath: path).appending(path: "settings.json"))
+        }
+        return urls
     }
 
     func health() async -> AdapterHealth {

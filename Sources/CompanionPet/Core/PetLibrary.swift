@@ -159,7 +159,13 @@ struct PetLibrary {
     }
 
     private func builtInManifestURL() -> URL? {
+        #if SWIFT_PACKAGE
         if let url = Bundle.module.resourceURL?.appending(path: "pet.json") {
+            return url
+        }
+        #endif
+
+        if let url = Bundle.main.resourceURL?.appending(path: "pet.json") {
             return url
         }
 

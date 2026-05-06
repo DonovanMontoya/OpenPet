@@ -121,11 +121,9 @@ private struct SpeechBubbleView: View {
                     Text(text)
                         .font(.system(size: 12, weight: .regular, design: .rounded))
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
                 }
                 .scrollIndicators(.automatic)
                 .frame(maxHeight: title == nil ? 48 : 34)
-                .simultaneousGesture(TapGesture().onEnded(onTap))
             }
 
             BubbleSourceBadgeView(badge: sourceBadge)
@@ -171,7 +169,9 @@ private struct SpeechBubbleView: View {
             .frame(maxWidth: 270, alignment: .leading)
             .frame(height: 98, alignment: .topLeading)
             .contentShape(Rectangle())
-            .onTapGesture(perform: onTap)
+            .onTapGesture {
+                onTap()
+            }
             .onHover { isHovered = $0 }
             .animation(.easeOut(duration: 0.12), value: isHovered)
     }
@@ -190,13 +190,19 @@ private struct BubbleSourceBadgeView: View {
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .lineLimit(1)
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(badge.tintColor ?? .secondary)
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .background(.regularMaterial, in: Capsule())
+        .background {
+            if let tint = badge.tintColor {
+                Capsule().fill(tint.opacity(0.14))
+            } else {
+                Capsule().fill(.regularMaterial)
+            }
+        }
         .overlay {
             Capsule()
-                .stroke(.white.opacity(0.45), lineWidth: 0.75)
+                .stroke((badge.tintColor ?? .white).opacity(0.35), lineWidth: 0.75)
         }
         .frame(maxWidth: 72, alignment: .trailing)
         .accessibilityLabel(badge.accessibilityLabel)
@@ -308,7 +314,7 @@ private struct PetArtView: View {
                     .interpolation(.none)
                     .scaledToFit()
                     .frame(width: size * 0.9, height: size * 0.9)
-                    .shadow(color: .white.opacity(0.42), radius: size * 0.025)
+                    .shadow(color: .white.opacity(renderFrame.semanticState == .sleeping ? 0.0 : 0.42), radius: size * 0.025)
                     .shadow(color: .black.opacity(0.5), radius: size * 0.04, y: size * 0.025)
             } else {
                 Image(systemName: "questionmark.circle.fill")

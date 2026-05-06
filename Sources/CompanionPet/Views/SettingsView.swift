@@ -84,6 +84,14 @@ struct SettingsView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
 
+                additionalDirectoriesView(
+                    title: "Additional Codex agent directories",
+                    helpText: "Watch alternate Codex home folders (each must contain a 'sessions' subfolder). Useful for parallel Codex installs.",
+                    paths: appModel.settings.codex.additionalAgentDirectories,
+                    addAction: { appModel.addCodexAgentDirectory() },
+                    removeAction: { appModel.removeCodexAgentDirectory(at: $0) }
+                )
+
                 TextField("Sample prompt", text: $codexSamplePrompt)
                     .textFieldStyle(.roundedBorder)
 
@@ -138,6 +146,14 @@ struct SettingsView: View {
                 Text("Claude Code watches local session files and can auto-install local hooks for faster updates.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+
+                additionalDirectoriesView(
+                    title: "Additional Claude agent directories",
+                    helpText: "Watch alternate Claude home folders (each must contain 'projects' and 'settings.json'). Useful when running multiple parallel Claude Code instances.",
+                    paths: appModel.settings.claudeCode.additionalAgentDirectories,
+                    addAction: { appModel.addClaudeAgentDirectory() },
+                    removeAction: { appModel.removeClaudeAgentDirectory(at: $0) }
+                )
 
                 Button("Launch Claude Code") {
                     appModel.launchClaudeCode()
@@ -230,6 +246,51 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding(18)
+    }
+
+    @ViewBuilder
+    private func additionalDirectoriesView(
+        title: String,
+        helpText: String,
+        paths: [String],
+        addAction: @escaping () -> Void,
+        removeAction: @escaping (Int) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.callout)
+                Spacer()
+                Button("Add Directory…", action: addAction)
+            }
+
+            Text(helpText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if paths.isEmpty {
+                Text("No additional directories configured.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(paths.enumerated()), id: \.offset) { index, path in
+                    HStack {
+                        Text(path)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                        Spacer()
+                        Button(role: .destructive) {
+                            removeAction(index)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+        }
     }
 
     private func healthText(for health: AdapterHealth?) -> String {

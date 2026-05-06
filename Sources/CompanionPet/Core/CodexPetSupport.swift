@@ -60,7 +60,7 @@ enum CodexPetSupport {
         .error: "failed",
         .waitingForUser: "waiting",
         .disconnected: "idle",
-        .sleeping: "idle",
+        .sleeping: "waiting",
         .jumping: "jumping",
         .waving: "waving",
     ]

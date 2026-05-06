@@ -34,7 +34,7 @@ struct ClaudeCodeHookReceiverTests {
             port: Int.random(in: 29100...29200),
             source: "claude-code",
             channel: EventChannel<CompanionEvent>(),
-            settingsURL: settingsURL
+            settingsURLs: [settingsURL]
         )
 
         try receiver.start()

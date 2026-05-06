@@ -36,9 +36,14 @@ actor OpenCodeSessionPoller {
         self.fileManager = fileManager
     }
 
-    func poll(source: String) throws -> [CompanionEvent] {
+    struct PollResult {
+        var events: [CompanionEvent]
+        var sessionID: String?
+    }
+
+    func poll(source: String) throws -> PollResult {
         guard let latestFile = try latestSessionFile() else {
-            return []
+            return PollResult(events: [], sessionID: nil)
         }
 
         let values = try latestFile.resourceValues(forKeys: [.contentModificationDateKey])
@@ -57,7 +62,7 @@ actor OpenCodeSessionPoller {
         }
 
         guard cursor.lastModifiedAt != modifiedAt else {
-            return []
+            return PollResult(events: [], sessionID: sessionID)
         }
 
         cursor.lastModifiedAt = modifiedAt
@@ -66,10 +71,10 @@ actor OpenCodeSessionPoller {
 
         if !cursor.didSeedInitialExport {
             cursor.didSeedInitialExport = true
-            return []
+            return PollResult(events: [], sessionID: sessionID)
         }
 
-        return events
+        return PollResult(events: events, sessionID: sessionID)
     }
 
     private func latestSessionFile() throws -> URL? {

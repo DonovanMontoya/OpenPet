@@ -73,6 +73,12 @@ struct PetLibraryTests {
         let waving = try #require(pack.manifest.state(named: .waving))
         #expect(waving.frames.count == 4)
         #expect(waving.loop == true)
+
+        // Codex atlases do not have a dedicated sleep row, so OpenPet uses the
+        // patient waiting loop instead of falling back to idle.
+        let sleeping = try #require(pack.manifest.state(named: .sleeping))
+        #expect(sleeping.frames.count == 6)
+        #expect(sleeping.frames.first?.value.contains("/waiting/") == true)
     }
 
     @Test

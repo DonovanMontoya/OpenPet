@@ -7,27 +7,35 @@ actor ClaudeCodeSessionPoller {
         var parser = ClaudeCodeJSONLParser()
     }
 
-    private let rootDirectory: URL
+    private let rootDirectories: [URL]
     private let fileManager: FileManager
     private var cursor = SessionCursor()
 
     init(
-        rootDirectory: URL = URL(filePath: NSHomeDirectory())
-            .appending(path: ".claude", directoryHint: .isDirectory)
-            .appending(path: "projects", directoryHint: .isDirectory),
+        rootDirectories: [URL]? = nil,
         fileManager: FileManager = .default
     ) {
-        self.rootDirectory = rootDirectory
+        let resolved = rootDirectories ?? [ClaudeCodeSessionPoller.defaultRootDirectory]
+        self.rootDirectories = resolved.isEmpty ? [ClaudeCodeSessionPoller.defaultRootDirectory] : resolved
         self.fileManager = fileManager
     }
 
+    static var defaultRootDirectory: URL {
+        URL(filePath: NSHomeDirectory())
+            .appending(path: ".claude", directoryHint: .isDirectory)
+            .appending(path: "projects", directoryHint: .isDirectory)
+    }
+
     func poll(source: String) throws -> [CompanionEvent] {
-        guard fileManager.fileExists(atPath: rootDirectory.path()) else {
-            return []
+        var allFiles: [URL] = []
+        for root in rootDirectories {
+            guard fileManager.fileExists(atPath: root.path()) else {
+                continue
+            }
+            allFiles.append(contentsOf: try jsonlFiles(in: root))
         }
 
-        let sessionFiles = try jsonlFiles(in: rootDirectory)
-        guard let latestFile = try sessionFiles.max(by: { lhs, rhs in
+        guard let latestFile = try allFiles.max(by: { lhs, rhs in
             let lhsDate = try lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast
             let rhsDate = try rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast
             return lhsDate < rhsDate

@@ -77,6 +77,15 @@ Run tests with:
 swift test
 ```
 
+Build the signed app from Xcode with:
+
+```bash
+xcodegen generate
+open OpenPet.xcodeproj
+```
+
+Use the `OpenPet` scheme. The project is generated from `project.yml`; update that file first, then rerun `xcodegen generate` when Xcode project settings need to change. Xcode signing is set to automatic with bundle identifier `io.openpet.OpenPet`, so select your development team in Xcode before archiving or using a non-ad-hoc signature.
+
 If SwiftPM caches were copied from another path and the build behaves strangely:
 
 ```bash

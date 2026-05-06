@@ -47,6 +47,7 @@ struct CodexAdapterSettings: Codable, Equatable, Sendable {
     var workingDirectoryPath: String = NSHomeDirectory()
     var preferredModel: String = ""
     var displayName: String = "Codex CLI"
+    var additionalAgentDirectories: [String] = []
 }
 
 struct LMStudioAdapterSettings: Codable, Equatable, Sendable {
@@ -64,6 +65,7 @@ struct ClaudeCodeAdapterSettings: Codable, Equatable, Sendable {
     var hookListenerPort: Int = 5051
     var autoConfigureHooks: Bool = true
     var displayName: String = "Claude Code"
+    var additionalAgentDirectories: [String] = []
 }
 
 struct OpenCodeAdapterSettings: Codable, Equatable, Sendable {

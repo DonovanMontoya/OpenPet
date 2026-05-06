@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import OSLog
 import SwiftUI
 
 struct OverlayBubble: Identifiable, Equatable {
@@ -10,6 +11,8 @@ struct OverlayBubble: Identifiable, Equatable {
     var sourceBadge: OverlaySourceBadge
     var source: String
     var launchTarget: OverlayLaunchTarget
+    var hostBinding: HostBinding?
+    var launchMetadata: [String: String] = [:]
     var expiresAt: Date?
     var updatedAt: Date
 }
@@ -18,6 +21,7 @@ struct OverlaySourceBadge: Equatable {
     var label: String
     var symbolName: String
     var accessibilityLabel: String
+    var tintColor: Color?
 }
 
 enum OverlayLaunchTarget: Equatable {
@@ -64,6 +68,9 @@ final class AppModel: ObservableObject {
     private let petLibrary = PetLibrary()
     private let behaviorEngine = CompanionBehaviorEngine()
     private let adapterHost = AdapterHost()
+    private let clickHostResolver = AgentHostResolver()
+    private lazy var clickCodexProcessLocator = SysctlCodexProcessLocator(hostResolver: clickHostResolver)
+    private let launchLogger = Logger(subsystem: "OpenPet", category: "OverlayLaunch")
 
     private var overlayController: OverlayWindowController?
     private var statusBarController: StatusBarController?
@@ -183,6 +190,35 @@ final class AppModel: ObservableObject {
         settings.codex.enabled = enabled
     }
 
+    func addCodexAgentDirectory() {
+        let panel = NSOpenPanel()
+        panel.title = "Add Codex Agent Directory"
+        panel.message = "Choose an alternate Codex home directory (the folder that contains a 'sessions' subfolder)."
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+
+        guard panel.runModal() == .OK, let selectedURL = panel.url else {
+            return
+        }
+
+        let path = selectedURL.path()
+        guard !settings.codex.additionalAgentDirectories.contains(path) else {
+            settingsMessage = "That Codex directory is already attached."
+            return
+        }
+        settings.codex.additionalAgentDirectories.append(path)
+        settingsMessage = "Added Codex directory \(selectedURL.lastPathComponent)."
+    }
+
+    func removeCodexAgentDirectory(at index: Int) {
+        guard settings.codex.additionalAgentDirectories.indices.contains(index) else {
+            return
+        }
+        settings.codex.additionalAgentDirectories.remove(at: index)
+    }
+
     func updateLMStudioEndpoint(_ endpoint: String) {
         settings.lmStudio.upstreamBaseURL = endpoint
     }
@@ -209,6 +245,35 @@ final class AppModel: ObservableObject {
 
     func setClaudeCodeEnabled(_ enabled: Bool) {
         settings.claudeCode.enabled = enabled
+    }
+
+    func addClaudeAgentDirectory() {
+        let panel = NSOpenPanel()
+        panel.title = "Add Claude Code Agent Directory"
+        panel.message = "Choose an alternate Claude home directory (the folder that contains 'projects' and 'settings.json')."
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+
+        guard panel.runModal() == .OK, let selectedURL = panel.url else {
+            return
+        }
+
+        let path = selectedURL.path()
+        guard !settings.claudeCode.additionalAgentDirectories.contains(path) else {
+            settingsMessage = "That Claude Code directory is already attached."
+            return
+        }
+        settings.claudeCode.additionalAgentDirectories.append(path)
+        settingsMessage = "Added Claude Code directory \(selectedURL.lastPathComponent)."
+    }
+
+    func removeClaudeAgentDirectory(at index: Int) {
+        guard settings.claudeCode.additionalAgentDirectories.indices.contains(index) else {
+            return
+        }
+        settings.claudeCode.additionalAgentDirectories.remove(at: index)
     }
 
     func updateOpenCodeExecutablePath(_ path: String) {
@@ -341,17 +406,24 @@ final class AppModel: ObservableObject {
     }
 
     func handleOverlayBubbleTap(id: String) {
-        if let bubble = overlayBubbles.first(where: { $0.id == id }),
-           bubble.symbolName == "checkmark.circle.fill" {
-            dismissOverlayBubble(id: bubble.id)
-            return
-        }
-
         guard let bubble = overlayBubbles.first(where: { $0.id == id }) else {
             return
         }
 
-        openOverlayLaunchTarget(bubble.launchTarget)
+        switch bubble.launchTarget {
+        case .codexCLI:
+            activateCodexBubbleHost(bubble)
+        case .claudeCode, .openCode:
+            if !OverlayLaunchResolver.activate(binding: bubble.hostBinding, fallback: {}) {
+                activateRunningCLIHost()
+            }
+        default:
+            openOverlayLaunchTarget(bubble.launchTarget)
+        }
+
+        if bubble.symbolName == "checkmark.circle.fill" {
+            dismissOverlayBubble(id: bubble.id)
+        }
     }
 
     func renderFrame(at date: Date) -> PetRenderFrame? {
@@ -975,14 +1047,11 @@ final class AppModel: ObservableObject {
             duration = 2
             keepsBubbleVisible = false
         case .adapterConnected:
-            guard !hasActiveOverlayActivity else {
-                return
-            }
-            message = event.payload["message"] ?? "\(sourceLabel(for: event.source)) connected"
+            message = nil
             title = nil
             symbolName = nil
             updateMode = .replace
-            duration = 2
+            duration = 0
             keepsBubbleVisible = false
         case .thinkingStarted:
             message = thinkingBubbleText(for: event)
@@ -1067,6 +1136,8 @@ final class AppModel: ObservableObject {
             symbolName: symbolName,
             sourceBadge: sourceBadge(for: event),
             source: event.source,
+            hostBinding: HostBinding.fromPayload(event.payload),
+            launchMetadata: launchMetadata(from: event.payload),
             expiresAt: keepsBubbleVisible ? nil : event.timestamp.addingTimeInterval(duration),
             updatedAt: event.timestamp,
             updateMode: updateMode
@@ -1080,17 +1151,24 @@ final class AppModel: ObservableObject {
         symbolName: String?,
         sourceBadge: OverlaySourceBadge,
         source: String,
+        hostBinding: HostBinding?,
+        launchMetadata: [String: String],
         expiresAt: Date?,
         updatedAt: Date,
         updateMode: OverlayBubbleUpdateMode
     ) {
+        let existing = overlayBubbles.first(where: { $0.id == id })
+
         let resolvedText: String
-        if updateMode == .append,
-           let existing = overlayBubbles.first(where: { $0.id == id })?.text {
-            resolvedText = appendedBubbleText(existing: existing, next: text)
+        if updateMode == .append, let existing {
+            resolvedText = appendedBubbleText(existing: existing.text, next: text)
         } else {
             resolvedText = text
         }
+
+        // Merge incoming binding on top of whatever we already know for this bubble.
+        let resolvedBinding = existing?.hostBinding?.merging(hostBinding) ?? hostBinding
+        let resolvedMetadata = existing?.launchMetadata.merging(launchMetadata) { _, new in new } ?? launchMetadata
 
         let bubble = OverlayBubble(
             id: id,
@@ -1100,6 +1178,8 @@ final class AppModel: ObservableObject {
             sourceBadge: sourceBadge,
             source: source,
             launchTarget: launchTarget(forSource: source),
+            hostBinding: resolvedBinding,
+            launchMetadata: resolvedMetadata,
             expiresAt: expiresAt,
             updatedAt: updatedAt
         )
@@ -1133,6 +1213,8 @@ final class AppModel: ObservableObject {
             symbolName: "questionmark.circle.fill",
             sourceBadge: sourceBadge(forSource: source, modelId: nil),
             source: source,
+            hostBinding: nil,
+            launchMetadata: [:],
             expiresAt: nil,
             updatedAt: date,
             updateMode: .replace
@@ -1296,8 +1378,22 @@ final class AppModel: ObservableObject {
         return OverlaySourceBadge(
             label: label,
             symbolName: sourceBadgeSymbol(for: source),
-            accessibilityLabel: accessibilityLabel
+            accessibilityLabel: accessibilityLabel,
+            tintColor: sourceBadgeTintColor(for: source)
         )
+    }
+
+    private func sourceBadgeTintColor(for source: String) -> Color? {
+        switch source {
+        case "claude-code":
+            return Color(red: 0.84, green: 0.47, blue: 0.30)
+        case "codex", "codex-cli", "codex-app", "codex-desktop":
+            return Color(red: 0.23, green: 0.55, blue: 0.92)
+        case "opencode-cli":
+            return Color(red: 0.33, green: 0.33, blue: 0.35)
+        default:
+            return nil
+        }
     }
 
     private func sourceBadgeLabel(source: String, modelId: String?) -> String {
@@ -1360,6 +1456,20 @@ final class AppModel: ObservableObject {
         return nil
     }
 
+    private func launchMetadata(from payload: [String: String]) -> [String: String] {
+        var metadata: [String: String] = [:]
+        if let cwd = payload[HostBindingPayloadKey.cwd] {
+            metadata[HostBindingPayloadKey.cwd] = cwd
+        }
+        if let originator = payload[CodexSessionMetadata.PayloadKey.originator] {
+            metadata[CodexSessionMetadata.PayloadKey.originator] = originator
+        }
+        if let source = payload[CodexSessionMetadata.PayloadKey.source] {
+            metadata[CodexSessionMetadata.PayloadKey.source] = source
+        }
+        return metadata
+    }
+
     private func launchTarget(forSource source: String) -> OverlayLaunchTarget {
         switch source {
         case "codex", "codex-cli":
@@ -1380,7 +1490,7 @@ final class AppModel: ObservableObject {
     private func openOverlayLaunchTarget(_ target: OverlayLaunchTarget) {
         switch target {
         case .codexCLI:
-            activateRunningCLIHost()
+            break
         case .codexApp:
             _ = activateApplication(
                 bundleIdentifiers: [
@@ -1412,6 +1522,124 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
+    private func activateCodexBubbleHost(_ bubble: OverlayBubble) -> Bool {
+        let sessionFile = codexSessionFile(forBubbleID: bubble.id)
+        let fileMetadata = sessionFile.flatMap(parseCodexSessionMetadata)
+        let metadata = mergedCodexMetadata(for: bubble, fileMetadata: fileMetadata)
+        let cwd = bubble.hostBinding?.cwd ?? metadata.cwd
+
+        launchLogger.info("Codex bubble click id=\(bubble.id, privacy: .public) cwd=\(cwd ?? "nil", privacy: .public) bundle=\(bubble.hostBinding?.hostBundleID ?? "nil", privacy: .public) pid=\(bubble.hostBinding?.hostPID.map(String.init) ?? "nil", privacy: .public) originator=\(metadata.originator ?? "nil", privacy: .public) source=\(metadata.source ?? "nil", privacy: .public)")
+
+        if let binding = resolveLiveCodexHost(sessionFile: sessionFile, cwd: cwd),
+           OverlayLaunchResolver.activate(binding: binding, fallback: {}) {
+            launchLogger.info("Codex bubble activated live process host bundle=\(binding.hostBundleID ?? "nil", privacy: .public) pid=\(binding.hostPID.map(String.init) ?? "nil", privacy: .public)")
+            return true
+        }
+
+        if metadata.prefersT3CodeHost,
+           activateApplication(bundleIdentifiers: t3CodeBundleIdentifiers, localizedNames: t3CodeNames) {
+            launchLogger.info("Codex bubble activated T3 Code from launch metadata")
+            return true
+        }
+
+        if OverlayLaunchResolver.activate(binding: bubble.hostBinding, fallback: {}) {
+            launchLogger.info("Codex bubble activated stored host binding")
+            return true
+        }
+
+        launchLogger.error("Codex bubble had no resolvable launch target id=\(bubble.id, privacy: .public)")
+        return false
+    }
+
+    private var t3CodeBundleIdentifiers: [String] {
+        [
+            "com.t3tools.t3code",
+            "com.t3dotgg.code",
+            "com.t3dotgg.code-nightly",
+            "com.t3dotgg.t3code",
+            "com.t3dotgg.t3code-nightly",
+        ]
+    }
+
+    private var t3CodeNames: [String] {
+        [
+            "T3 Code",
+            "T3Code",
+            "T3 Code Nightly",
+            "T3Code Nightly",
+            "T3 Code (Nightly)",
+            "T3Code (Nightly)",
+        ]
+    }
+
+    private func resolveLiveCodexHost(sessionFile: URL?, cwd: String?) -> HostBinding? {
+        let codexPID = sessionFile.flatMap(clickCodexProcessLocator.findCodexPID(holdingSessionFile:))
+            ?? clickCodexProcessLocator.findCodexPID(matchingCwd: cwd)
+        guard let codexPID else {
+            return nil
+        }
+        var binding = clickHostResolver.resolveHost(forAgentPID: codexPID)
+        binding.cwd = cwd
+        return binding.isEmpty ? nil : binding
+    }
+
+    private func bubblePrefersT3Code(_ bubble: OverlayBubble) -> Bool {
+        mergedCodexMetadata(for: bubble, fileMetadata: nil).prefersT3CodeHost
+    }
+
+    private func mergedCodexMetadata(for bubble: OverlayBubble, fileMetadata: CodexSessionMetadata?) -> CodexSessionMetadata {
+        CodexSessionMetadata(
+            id: bubble.id,
+            cwd: bubble.hostBinding?.cwd ?? bubble.launchMetadata[HostBindingPayloadKey.cwd],
+            originator: bubble.launchMetadata[CodexSessionMetadata.PayloadKey.originator] ?? fileMetadata?.originator,
+            source: bubble.launchMetadata[CodexSessionMetadata.PayloadKey.source] ?? fileMetadata?.source
+        ).merging(fileMetadata)
+    }
+
+    private func codexSessionMetadata(forBubbleID id: String) -> CodexSessionMetadata? {
+        codexSessionFile(forBubbleID: id).flatMap(parseCodexSessionMetadata)
+    }
+
+    private func codexSessionFile(forBubbleID id: String) -> URL? {
+        guard id != "codex", id != "codex-cli" else {
+            return nil
+        }
+        let fileManager = FileManager.default
+        for root in codexSessionRoots() where fileManager.fileExists(atPath: root.path()) {
+            guard let enumerator = fileManager.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "jsonl" {
+                guard url.lastPathComponent.contains(id) else {
+                    continue
+                }
+                return url
+            }
+        }
+        return nil
+    }
+
+    private func parseCodexSessionMetadata(at url: URL) -> CodexSessionMetadata? {
+        CodexSessionMetadata.parseFirstLine(at: url)
+    }
+
+    private func codexSessionRoots() -> [URL] {
+        var roots = [
+            URL(filePath: NSHomeDirectory())
+                .appending(path: ".codex", directoryHint: .isDirectory)
+                .appending(path: "sessions", directoryHint: .isDirectory),
+        ]
+        roots.append(contentsOf: settings.codex.additionalAgentDirectories
+            .filter { !$0.isEmpty }
+            .map { URL(filePath: $0).appending(path: "sessions", directoryHint: .isDirectory) })
+        return roots
+    }
+
+    @discardableResult
     private func activateRunningCLIHost() -> Bool {
         let cliHostBundleIdentifiers = [
             "com.mitchellh.ghostty",
@@ -1422,12 +1650,7 @@ final class AppModel: ObservableObject {
             "com.github.wez.wezterm",
             "net.kovidgoyal.kitty",
             "org.alacritty",
-            "com.t3dotgg.code",
-            "com.t3dotgg.code-nightly",
-            "com.t3dotgg.t3code",
-            "com.t3dotgg.t3code-nightly",
-            "com.t3tools.t3code",
-        ]
+        ] + t3CodeBundleIdentifiers
         let cliHostNames = [
             "Ghostty",
             "Terminal",
@@ -1437,23 +1660,11 @@ final class AppModel: ObservableObject {
             "WezTerm",
             "kitty",
             "Alacritty",
-            "T3 Code",
-            "T3Code",
-            "T3 Code Nightly",
-            "T3Code Nightly",
-            "T3 Code (Nightly)",
-            "T3Code (Nightly)",
-            "t3 code",
-            "t3code",
-            "t3 code nightly",
-            "t3code nightly",
-            "t3 code (nightly)",
-            "t3code (nightly)",
-        ]
+        ] + t3CodeNames
 
         if let frontmostApp = NSWorkspace.shared.frontmostApplication,
            isApplication(frontmostApp, bundleIdentifiers: cliHostBundleIdentifiers, localizedNames: cliHostNames) {
-            frontmostApp.activate(options: [.activateAllWindows])
+            forceActivate(frontmostApp)
             return true
         }
 
@@ -1494,8 +1705,35 @@ final class AppModel: ObservableObject {
             return false
         }
 
-        runningApp.activate(options: [.activateAllWindows])
+        forceActivate(runningApp)
         return true
+    }
+
+    private func forceActivate(_ app: NSRunningApplication) {
+        app.unhide()
+        app.activate(options: [.activateAllWindows])
+        if let bundleID = app.bundleIdentifier, !bundleID.isEmpty {
+            runActivateAppleScript(target: #"id "\#(escapedAppleScriptInlineString(bundleID))""#)
+            return
+        }
+        if let name = app.localizedName, !name.isEmpty {
+            runActivateAppleScript(target: #""\#(escapedAppleScriptInlineString(name))""#)
+        }
+    }
+
+    private func runActivateAppleScript(target: String) {
+        let script = NSAppleScript(source: "tell application \(target) to activate")
+        var error: NSDictionary?
+        script?.executeAndReturnError(&error)
+        if let error {
+            launchLogger.error("Activation AppleScript failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func escapedAppleScriptInlineString(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
     private func isApplication(
