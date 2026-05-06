@@ -34,15 +34,15 @@ The current v1 target is:
 
 ### App shell
 
-- [CompanionPetApp.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/CompanionPetApp.swift) defines the SwiftUI app entry.
-- [AppDelegate.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/App/AppDelegate.swift) starts the accessory app and wires the overlay + status item.
-- [OverlayWindowController.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/App/OverlayWindowController.swift) owns the borderless floating pet window.
-- [StatusBarController.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/App/StatusBarController.swift) owns the menu bar UI.
-- [SettingsView.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Views/SettingsView.swift) exposes configuration and test hooks.
+- [CompanionPetApp.swift](Sources/CompanionPet/CompanionPetApp.swift) defines the SwiftUI app entry.
+- [AppDelegate.swift](Sources/CompanionPet/App/AppDelegate.swift) starts the accessory app and wires the overlay + status item.
+- [OverlayWindowController.swift](Sources/CompanionPet/App/OverlayWindowController.swift) owns the borderless floating pet window.
+- [StatusBarController.swift](Sources/CompanionPet/App/StatusBarController.swift) owns the menu bar UI.
+- [SettingsView.swift](Sources/CompanionPet/Views/SettingsView.swift) exposes configuration and test hooks.
 
 ### App state
 
-- [AppModel.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/App/AppModel.swift) is the main orchestration layer.
+- [AppModel.swift](Sources/CompanionPet/App/AppModel.swift) is the main orchestration layer.
 - It owns:
   - persisted settings
   - selected pet
@@ -53,42 +53,42 @@ The current v1 target is:
 
 ### Event model
 
-- [CompanionEvent.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Core/CompanionEvent.swift) defines the normalized internal event schema.
+- [CompanionEvent.swift](Sources/CompanionPet/Core/CompanionEvent.swift) defines the normalized internal event schema.
 - All adapters must emit `CompanionEvent` values instead of directly mutating UI state.
 - The app should stay event-driven. Avoid adding vendor-specific state directly to the overlay layer.
 
 ### Behavior engine
 
-- [BehaviorEngine.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Core/BehaviorEngine.swift) maps normalized events into semantic pet states.
+- [BehaviorEngine.swift](Sources/CompanionPet/Core/BehaviorEngine.swift) maps normalized events into semantic pet states.
 - It is deterministic and timer-driven.
 - If you add new behaviors, update the behavior engine first, then update pet manifests and rendering.
 
 ### Pet runtime
 
-- [PetManifest.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Core/PetManifest.swift) defines the pet asset contract.
-- [PetLibrary.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Core/PetLibrary.swift) loads the built-in pet plus custom pets from Application Support.
-- [OverlayPetView.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Views/OverlayPetView.swift) renders the active frame.
+- [PetManifest.swift](Sources/CompanionPet/Core/PetManifest.swift) defines the pet asset contract.
+- [PetLibrary.swift](Sources/CompanionPet/Core/PetLibrary.swift) loads the built-in pet plus custom pets from Application Support.
+- [OverlayPetView.swift](Sources/CompanionPet/Views/OverlayPetView.swift) renders the active frame.
 
 The current built-in pet is symbol-driven and stored at:
 
-- [pet.json](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Resources/DefaultPets/orbiter/pet.json)
+- [pet.json](Sources/CompanionPet/Resources/DefaultPets/orbiter/pet.json)
 
 ### Integrations
 
-- [CodexCLIAdapter.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Adapters/CodexCLIAdapter.swift)
+- [CodexCLIAdapter.swift](Sources/CompanionPet/Adapters/CodexCLIAdapter.swift)
   - launches `codex exec --json`
   - parses structured output
   - emits normalized events
 
-- [CodexExecJSONParser.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Adapters/CodexExecJSONParser.swift)
+- [CodexExecJSONParser.swift](Sources/CompanionPet/Adapters/CodexExecJSONParser.swift)
   - translates Codex JSON event lines into `CompanionEvent`
 
-- [LMStudioProxyAdapter.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Adapters/LMStudioProxyAdapter.swift)
+- [LMStudioProxyAdapter.swift](Sources/CompanionPet/Adapters/LMStudioProxyAdapter.swift)
   - runs a local OpenAI-compatible proxy
   - forwards requests to LM Studio
   - emits normalized lifecycle events around request/stream activity
 
-- [SimpleHTTPServer.swift](/Users/donovan/Documents/Github/OpenPet/Sources/CompanionPet/Networking/SimpleHTTPServer.swift)
+- [SimpleHTTPServer.swift](Sources/CompanionPet/Networking/SimpleHTTPServer.swift)
   - lightweight local HTTP server for the proxy path
 
 ## Semantic States
@@ -191,7 +191,7 @@ Current coverage includes:
 
 If you change any of those subsystems, extend the corresponding tests under:
 
-- [CompanionPetTests](/Users/donovan/Documents/Github/OpenPet/Tests/CompanionPetTests)
+- [CompanionPetTests](Tests/CompanionPetTests)
 
 ## Known V1 Constraints
 
