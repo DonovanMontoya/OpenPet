@@ -1024,7 +1024,7 @@ final class AppModel: ObservableObject {
             symbolName = event.kind == .buildSucceeded ? "checkmark.circle.fill" : nil
             updateMode = .append
             duration = 2
-            keepsBubbleVisible = false
+            keepsBubbleVisible = event.kind == .buildSucceeded
         case .buildStarted, .codingStarted, .focusStarted:
             message = event.payload["message"] ?? "Working..."
             title = nil
@@ -1093,8 +1093,8 @@ final class AppModel: ObservableObject {
             title = previousActivityTitle
             symbolName = "checkmark.circle.fill"
             updateMode = .append
-            duration = 12
-            keepsBubbleVisible = false
+            duration = 0
+            keepsBubbleVisible = true
             clearActivityTitle(for: event)
         case .userWaiting:
             message = "Waiting for your input."
