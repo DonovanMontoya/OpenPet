@@ -5,3 +5,4 @@ DerivedData/
 dist/
 xcuserdata/
 *.xcuserstate
+.openpet-cache/

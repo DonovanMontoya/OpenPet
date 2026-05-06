@@ -1,115 +1,141 @@
-# OpenPet
+<div align="center">
 
-OpenPet is a native macOS desktop companion for AI workflows. Its goal is to recreate the feel of the Codex Pets feature, but as an agent-agnostic layer that can work across tools like Codex, Codex CLI, Claude Code, OpenCode, LM Studio, and future adapters instead of being tied to a single vendor experience.
+# 🐾 OpenPet
 
-The repo's Swift package product is named `CompanionPet`, but the project itself is `OpenPet`.
+**A native macOS desktop companion for AI workflows.**
 
-## Goal
+*Bringing the Codex Pets experience to every agent tool — no vendor lock-in.*
 
-OpenPet is trying to make the Codex Pets idea portable.
+[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue?style=flat-square&logo=apple)](https://www.apple.com/macos/)
+[![Swift](https://img.shields.io/badge/swift-6.0-orange?style=flat-square&logo=swift)](https://swift.org)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Status](https://img.shields.io/badge/status-active-brightgreen?style=flat-square)]()
 
-- Keep the delightful ambient desktop pet experience
-- Preserve the idea that the pet reacts to real agent activity, not random idle animation alone
-- Decouple the runtime from any one client so the same companion can follow work happening in different agent tools
-- Normalize activity from multiple sources into one shared behavior engine and pet runtime
+</div>
 
-## What It Does
+---
 
-- Recreates the Codex Pets style of ambient activity feedback in a standalone macOS app
-- Shows normalized AI activity through a lightweight always-on-top overlay pet
-- Maps tool and session events into deterministic semantic states like `thinking`, `working`, `replying`, `success`, and `error`
-- Exposes a menu bar control surface plus a settings window for configuration
-- Supports built-in, custom, and Codex-format pet packs
-- Stays vendor-agnostic at the runtime layer by translating adapter-specific activity into shared `CompanionEvent` values
+## What Is OpenPet?
 
-## Current Integrations
+OpenPet recreates the delightful ambient desktop pet experience from Codex Pets — but makes it **agent-agnostic**. The same companion follows your AI work whether you're in Codex, Codex CLI, Claude Code, OpenCode, T3 Code, or something else entirely.
 
-The long-term direction is broad agent support. The current codebase includes adapters for:
+> The repo's Swift package product is named `CompanionPet`, but the project itself is `OpenPet`.
 
-- `Codex CLI`
-  Watches local Codex session JSONL files, parses `codex exec --json` output, and can launch sample Codex sessions.
-- `Claude Code`
-  Watches local Claude Code session activity and can optionally auto-configure local hooks for faster updates.
-- `OpenCode`
-  Reads the latest exported local OpenCode session transcript and can launch an OpenCode terminal session.
-- `LM Studio`
-  Runs a small local OpenAI-compatible proxy and emits lifecycle events around requests and streaming responses.
+---
 
-## Architecture
+## ✨ Core Idea
+
+| Principle | What It Means |
+|-----------|--------------|
+| 🎮 **Ambient feedback** | Pet reacts to real agent activity, not just idle animation |
+| 🔌 **Vendor-agnostic** | One companion, any agent tool |
+| 🧠 **Semantic states** | Activity normalized into `thinking`, `working`, `replying`, `success`, `error` |
+| 📦 **Portable pet packs** | Bring your own pet, or use built-in ones [Codex /hatch-pet compatible] |
+
+---
+
+## 🔗 Current Integrations
+
+```
+┌──────────────────┬────────────────────────────────────────────────────────┐
+│  Adapter         │  How it works                                          │
+├──────────────────┼────────────────────────────────────────────────────────┤
+│  Codex CLI       │  Watches session JSONL files, parses codex exec output │
+│  Codex Desktop   │  Watches local Codex Desktop session activity          │
+│  Claude Code     │  Watches local session activity, supports auto-hooks   │
+│  Claude Desktop  │  Watches local Claude Desktop session activity         │
+│  OpenCode        │  Reads exported session transcripts                    │
+│  T3 Code         │  Watches local T3 Code session activity                │
+│  LM Studio       │  Local OpenAI-compatible proxy with lifecycle events   │
+└──────────────────┴────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🏗 Architecture
 
 The app is organized around a few narrow layers:
 
-- `Sources/CompanionPet/App/AppModel.swift`
-  Main orchestration layer for settings, pet selection, adapters, overlay behavior, and event consumption.
-- `Sources/CompanionPet/Core/BehaviorEngine.swift`
-  Deterministic state engine that translates normalized events into semantic pet states.
-- `Sources/CompanionPet/Core/CompanionEvent.swift`
-  Shared event schema and adapter contracts.
-- `Sources/CompanionPet/Core/PetManifest.swift`
-  Manifest-driven pet runtime for built-in and imported pets.
-- `Sources/CompanionPet/Views/OverlayPetView.swift`
-  SwiftUI overlay rendering for the pet and speech bubbles.
-- `Sources/CompanionPet/App/OverlayWindowController.swift`
-  Borderless floating window bridge for the overlay.
-- `Sources/CompanionPet/Adapters/`
-  Integration-specific adapters and parsers.
+```
+Sources/CompanionPet/
+├── App/           ← lifecycle, menu bar, windows, orchestration
+├── Adapters/      ← Codex, Claude Code, OpenCode, LM Studio
+├── Core/          ← events, behavior engine, settings, pet runtime
+├── Networking/    ← lightweight HTTP server
+├── Resources/     ← built-in pet assets and manifests
+└── Views/         ← SwiftUI overlay and settings views
 
-The app is event-driven by design. Adapters emit `CompanionEvent` values, and the behavior engine decides the pet state from there.
+Tests/CompanionPetTests/
+└──              ← behavior engine, parsers, pet loading, proxy, geometry
+```
 
-## Requirements
+**Event flow:**
+
+```
+Adapter  →  CompanionEvent  →  BehaviorEngine  →  Pet State  →  Overlay
+```
+
+Key files:
+
+- [`AppModel.swift`](Sources/CompanionPet/App/AppModel.swift) — main orchestration layer
+- [`BehaviorEngine.swift`](Sources/CompanionPet/Core/BehaviorEngine.swift) — deterministic state machine
+- [`CompanionEvent.swift`](Sources/CompanionPet/Core/CompanionEvent.swift) — shared event schema
+- [`PetManifest.swift`](Sources/CompanionPet/Core/PetManifest.swift) — manifest-driven pet runtime
+- [`OverlayPetView.swift`](Sources/CompanionPet/Views/OverlayPetView.swift) — SwiftUI overlay rendering
+
+---
+
+## 🚀 Getting Started
+
+### Requirements
 
 - macOS 14+
 - Swift 6 toolchain
-- Optional local tools depending on which adapters you enable:
-  `codex`, `claude`, `opencode`, `LM Studio`
+- Optional: `codex`, `claude`, `opencode`, LM Studio (depending on which adapters you enable)
 
-## Running The App
-
-From the repo root:
+### Run from source
 
 ```bash
 swift run CompanionPet
 ```
 
-Run tests with:
+### Run tests
 
 ```bash
 swift test
 ```
 
-Build the signed app from Xcode with:
+### Build the signed app (Xcode)
 
 ```bash
 xcodegen generate
 open OpenPet.xcodeproj
 ```
 
-Use the `OpenPet` scheme. The project is generated from `project.yml`; update that file first, then rerun `xcodegen generate` when Xcode project settings need to change. Xcode signing is set to automatic with bundle identifier `io.openpet.OpenPet`, so select your development team in Xcode before archiving or using a non-ad-hoc signature.
+Use the `OpenPet` scheme. The project is generated from `project.yml` — update that file first, then rerun `xcodegen generate` when Xcode project settings need to change. Signing is set to automatic with bundle ID `io.openpet.OpenPet`; select your development team in Xcode before archiving.
 
-If SwiftPM caches were copied from another path and the build behaves strangely:
+> **Build acting weird?** If SwiftPM caches were copied from another path:
+> ```bash
+> rm -rf .build && swift run CompanionPet
+> ```
 
-```bash
-rm -rf .build
-swift run CompanionPet
-```
+---
 
-## Packaging
-
-The app currently runs well from `swift run`, but the repo now includes a first packaging pass for building a real macOS app bundle:
+## 📦 Packaging
 
 ```bash
 ./scripts/package-macos-app.sh
 ```
 
-That script will:
+The script builds a real macOS app bundle at `dist/OpenPet.app`:
 
-- build the Swift package in `release` mode
-- create `dist/OpenPet.app`
-- copy the `CompanionPet` executable into the app bundle
-- wrap the SwiftPM resource files into a loadable `CompanionPet_CompanionPet.bundle`
-- sign the executable, resource bundle, and app bundle
+1. Builds the Swift package in `release` mode
+2. Creates `dist/OpenPet.app`
+3. Copies the `CompanionPet` executable into the bundle
+4. Wraps SwiftPM resource files into a loadable `CompanionPet_CompanionPet.bundle`
+5. Signs the executable, resource bundle, and app bundle
 
-Useful environment overrides:
+**Environment overrides:**
 
 ```bash
 SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/package-macos-app.sh
@@ -117,77 +143,78 @@ VERSION="0.1.0" BUILD_NUMBER="1" ./scripts/package-macos-app.sh
 SKIP_BUILD=1 ./scripts/package-macos-app.sh
 ```
 
-The packaged app uses `LSUIElement`, so it behaves like an accessory/menu bar app rather than a normal Dock app.
+The packaged app uses `LSUIElement`, so it behaves as a menu bar / accessory app rather than a normal Dock app.
 
-## Using OpenPet
+---
 
-When the app launches, it runs as a macOS accessory app with:
+## 🐱 Using OpenPet
 
-- a floating overlay pet window
-- a menu bar item
-- a settings window
+When the app launches you get:
 
-In Settings you can:
+- 🪟 **Floating overlay** — the pet lives on top of everything
+- 📋 **Menu bar item** — quick access controls
+- ⚙️ **Settings window** — configure everything
 
-- pause animations
-- lock overlay dragging
-- reduce motion
-- toggle speech bubbles
-- change overlay size
-- switch pets
-- configure adapter executable paths and working directories
-- launch Claude Code or OpenCode from the app
-- run a sample Codex session
+**In Settings you can:**
 
-## Pet Packs
+- Pause animations / reduce motion
+- Lock overlay dragging
+- Toggle speech bubbles
+- Resize the overlay
+- Switch pets
+- Configure adapter paths and working directories
+- Launch Claude Code or OpenCode directly from the app
+- Run a sample Codex session
 
-OpenPet supports:
+---
 
-- the built-in `Orbiter` pet
-- custom pets stored in `~/Library/Application Support/CompanionPet/Pets`
-- Codex pet folders stored in `~/.codex/pets`
+## 🎨 Pet Packs
 
-Each pet pack is manifest-driven through a `pet.json` file. The built-in example lives at:
+OpenPet supports three pet sources:
 
-- `Sources/CompanionPet/Resources/DefaultPets/orbiter/pet.json`
+| Source | Location |
+|--------|----------|
+| Built-in pets (`Orbiter`, `Cappy`) | Bundled with the app |
+| Custom pets | `~/Library/Application Support/CompanionPet/Pets` |
+| Codex pets | `~/.codex/pets` |
 
-States currently supported by the runtime include:
+Each pet pack is defined by a `pet.json` manifest. See the built-in example at:
+[`Sources/CompanionPet/Resources/DefaultPets/orbiter/pet.json`](Sources/CompanionPet/Resources/DefaultPets/orbiter/pet.json)
 
-- `idle`
-- `ambient`
-- `thinking`
-- `working`
-- `replying`
-- `success`
-- `error`
-- `waiting_for_user`
-- `disconnected`
-- `sleeping`
-- `jumping`
-- `waving`
+<div align="center">
+<img src=".github/cappy.png" width="160" alt="Cappy — OpenPet companion" />
+<br/><sub><i>Cappy — the default built-in companion.</i></sub>
+</div>
 
-## Project Layout
+**Supported states:**
 
-```text
-Sources/CompanionPet/
-  App/           App lifecycle, menu bar, windows, orchestration
-  Adapters/      Codex, Claude Code, OpenCode, LM Studio integrations
-  Core/          Events, behavior engine, settings, pet runtime
-  Networking/    Lightweight HTTP server and request/response types
-  Resources/     Built-in pet assets and manifests
-  Views/         SwiftUI overlay and settings views
-
-Tests/CompanionPetTests/
-  Behavior engine, parsers, pet loading, proxy, and geometry tests
+```
+idle  •  ambient  •  thinking  •  working  •  replying
+success  •  error  •  waiting_for_user  •  disconnected
+sleeping  •  jumping  •  waving
 ```
 
-## Development Notes
+---
 
-- Keep runtime logic vendor-agnostic; integration-specific assumptions belong in adapters.
-- Extend the behavior engine before adding new render-only states.
-- Preserve deterministic state selection rather than letting adapters drive visuals directly.
-- Run `swift test` before finishing meaningful changes.
+## 🛠 Development Notes
 
-## Status
+- Keep runtime logic vendor-agnostic — integration-specific assumptions belong in adapters
+- Extend the behavior engine before adding new render-only states
+- Preserve deterministic state selection; adapters should not drive visuals directly
+- Run `swift test` before finishing meaningful changes
 
-OpenPet is currently a SwiftPM macOS app target rather than a packaged `.app` bundle, but the core overlay, adapter, and pet systems are already in place.
+---
+
+## 📊 Status
+
+OpenPet's core overlay, adapter, and pet systems are in place and running well from `swift run`. A first packaging pass for a real `.app` bundle is also included.
+
+> Long-term direction: broad agent support across the AI tooling ecosystem.
+
+---
+
+<div align="center">
+
+Made with ♥ for the AI-native desktop
+
+</div>
