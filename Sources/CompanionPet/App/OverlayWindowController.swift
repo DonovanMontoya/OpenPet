@@ -9,7 +9,7 @@ final class OverlayWindowController {
     private let petWindow: NSWindow
     private let bubbleWindow: NSWindow
     private var hasRestoredInitialPosition = false
-    private var hasAttachedBubbleWindow = false
+    private var activeSpaceObserver: NSObjectProtocol?
 
     init(appModel: AppModel) {
         self.appModel = appModel
@@ -39,11 +39,11 @@ final class OverlayWindowController {
     func install() {
         petWindow.contentView = petHostingView
         bubbleWindow.contentView = bubbleHostingView
-        attachBubbleWindowIfNeeded()
+        observeActiveSpaceChanges()
         restorePosition()
         syncBubbleWindow()
         hasRestoredInitialPosition = true
-        petWindow.orderFrontRegardless()
+        orderOverlayWindows()
     }
 
     func apply(settings: CompanionSettings, selectedPetChanged: Bool) {
@@ -101,7 +101,7 @@ final class OverlayWindowController {
         window.backgroundColor = .clear
         window.hasShadow = false
         window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
     }
@@ -139,8 +139,6 @@ final class OverlayWindowController {
     }
 
     private func syncBubbleWindow() {
-        attachBubbleWindowIfNeeded()
-
         guard appModel.showsOverlayBubble() else {
             bubbleWindow.orderOut(nil)
             return
@@ -155,15 +153,38 @@ final class OverlayWindowController {
             visibleFrame: visibleFrame
         )
         bubbleWindow.setFrameOrigin(origin)
-        bubbleWindow.orderFront(nil)
+        orderOverlayWindows()
     }
 
-    private func attachBubbleWindowIfNeeded() {
-        guard !hasAttachedBubbleWindow else {
+    private func observeActiveSpaceChanges() {
+        guard activeSpaceObserver == nil else {
             return
         }
-        petWindow.addChildWindow(bubbleWindow, ordered: .above)
-        hasAttachedBubbleWindow = true
+        activeSpaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleActiveSpaceDidChange()
+            }
+        }
+    }
+
+    private func handleActiveSpaceDidChange() {
+        syncBubbleWindow()
+        if !appModel.showsOverlayBubble() {
+            petWindow.orderFrontRegardless()
+        }
+    }
+
+    private func orderOverlayWindows() {
+        petWindow.orderFrontRegardless()
+        guard appModel.showsOverlayBubble() else {
+            bubbleWindow.orderOut(nil)
+            return
+        }
+        bubbleWindow.orderFrontRegardless()
     }
 
     private func screenForPetWindow() -> NSScreen? {
