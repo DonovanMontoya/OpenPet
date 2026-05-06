@@ -23,8 +23,10 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Sources/CompanionPet
-    resources:
-      - path: Sources/CompanionPet/Resources
+        excludes:
+          - Resources/DefaultPets/**
+      - path: Sources/CompanionPet/Resources/DefaultPets
+        type: folder
     info:
       path: packaging/XcodeInfo.plist
       properties:

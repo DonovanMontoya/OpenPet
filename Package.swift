@@ -17,7 +17,7 @@ let package = Package(
         .executableTarget(
             name: "CompanionPet",
             resources: [
-                .process("Resources"),
+                .copy("Resources/DefaultPets"),
             ]
         ),
         .testTarget(

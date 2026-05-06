@@ -1,8 +1,8 @@
 import Foundation
 
 enum BuiltInPet {
-    static let defaultID = "violet"
-    static let legacyIDs: Set<String> = ["orbiter"]
+    static let defaultID = "cappy"
+    static let legacyIDs: Set<String> = ["orbiter", "violet"]
 
     static func matches(_ id: String) -> Bool {
         id == defaultID || legacyIDs.contains(id)
@@ -12,6 +12,7 @@ enum BuiltInPet {
 struct PetLibrary {
     func loadPet(id: String, customDirectory: URL, codexDirectory: URL? = nil) throws -> PetPack? {
         if BuiltInPet.matches(id) {
+            if let pack = try loadBundledPet(id: id) { return pack }
             return try loadBuiltInPet()
         }
 
@@ -28,8 +29,8 @@ struct PetLibrary {
     }
 
     func loadPets(customDirectory: URL, codexDirectory: URL? = nil) throws -> [PetPack] {
-        var packs: [PetPack] = [try loadBuiltInPet()]
-        var seenIDs: Set<String> = [packs[0].id]
+        var packs = try loadBundledPets()
+        var seenIDs = Set(packs.map { $0.id })
 
         try loadPacks(from: customDirectory, source: .custom, into: &packs, seenIDs: &seenIDs)
 
@@ -121,6 +122,45 @@ struct PetLibrary {
         )
     }
 
+    private func builtInDirectoryURL() -> URL? {
+        builtInManifestURL()?
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func loadBundledPet(id: String) throws -> PetPack? {
+        guard let base = builtInDirectoryURL() else { return nil }
+        let packDir = base.appending(path: id, directoryHint: .isDirectory)
+        let manifestURL = packDir.appending(path: "pet.json")
+        guard FileManager.default.fileExists(atPath: manifestURL.path()) else { return nil }
+        let manifest = try decodeAnyManifest(at: manifestURL, directoryURL: packDir)
+        guard manifest.validationErrors().isEmpty else { return nil }
+        return PetPack(manifest: manifest, directoryURL: packDir, source: .builtIn)
+    }
+
+    private func loadBundledPets() throws -> [PetPack] {
+        guard let base = builtInDirectoryURL() else {
+            return [try loadBuiltInPet()]
+        }
+        let fm = FileManager.default
+        let contents = (try? fm.contentsOfDirectory(
+            at: base,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        var packs: [PetPack] = []
+        for dir in contents {
+            guard (try? dir.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { continue }
+            let manifestURL = dir.appending(path: "pet.json")
+            guard fm.fileExists(atPath: manifestURL.path()) else { continue }
+            guard let manifest = try? decodeAnyManifest(at: manifestURL, directoryURL: dir),
+                  manifest.validationErrors().isEmpty else { continue }
+            packs.append(PetPack(manifest: manifest, directoryURL: dir, source: .builtIn))
+        }
+        if packs.isEmpty { packs.append(try loadBuiltInPet()) }
+        return packs
+    }
+
     func loadBuiltInPet() throws -> PetPack {
         guard let manifestURL = builtInManifestURL() else {
             throw PetLibraryError.missingBuiltInManifest
@@ -159,23 +199,30 @@ struct PetLibrary {
     }
 
     private func builtInManifestURL() -> URL? {
-        #if SWIFT_PACKAGE
-        if let url = Bundle.module.resourceURL?.appending(path: "pet.json") {
-            return url
+        let structuredPath = "DefaultPets/\(BuiltInPet.defaultID)/pet.json"
+        let fm = FileManager.default
+
+        func resolve(in base: URL?) -> URL? {
+            guard let base else { return nil }
+            let structured = base.appending(path: structuredPath)
+            if fm.fileExists(atPath: structured.path()) { return structured }
+            let flat = base.appending(path: "pet.json")
+            if fm.fileExists(atPath: flat.path()) { return flat }
+            return nil
         }
+
+        #if SWIFT_PACKAGE
+        if let url = resolve(in: Bundle.module.resourceURL) { return url }
         #endif
 
-        if let url = Bundle.main.resourceURL?.appending(path: "pet.json") {
-            return url
-        }
+        if let url = resolve(in: Bundle.main.resourceURL) { return url }
 
         guard let resourceBundleURL = Bundle.main.resourceURL?
             .appending(path: "CompanionPet_CompanionPet.bundle", directoryHint: .isDirectory),
               let resourceBundle = Bundle(url: resourceBundleURL) else {
             return nil
         }
-
-        return resourceBundle.resourceURL?.appending(path: "pet.json")
+        return resolve(in: resourceBundle.resourceURL)
     }
 
     private func decodeCodexManifest(at url: URL) throws -> CodexPetManifest {
