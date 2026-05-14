@@ -8,7 +8,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue?style=flat-square&logo=apple)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/swift-6.0-orange?style=flat-square&logo=swift)](https://swift.org)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--v3-blue?style=flat-square)](LICENSE)
 [![Status](https://img.shields.io/badge/status-active-brightgreen?style=flat-square)]()
 
 </div>
